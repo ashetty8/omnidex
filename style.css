@@ -250,10 +250,25 @@ body {
   cursor: pointer;
 }
 
+.habitat-icon {
+  height: 16px;
+  width: auto;
+  vertical-align: middle;
+  margin-right: 5px;
+  image-rendering: pixelated;
+}
+
 .gen-option.selected {
   background: var(--accent);
   border-color: var(--accent);
   color: #fff;
+}
+
+.gen-option.excluded {
+  background: var(--bg);
+  border-color: #e5484d;
+  color: #e5484d;
+  text-decoration: line-through;
 }
 
 .toggle-btn {

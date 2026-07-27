@@ -12,6 +12,24 @@
   };
   const GEN_ORDER = Object.keys(GEN_LABELS);
 
+  // In-game habitat icons from FireRed/LeafGreen's Pokédex search screen,
+  // sourced from Bulbapedia's "List of Pokémon by habitat" and bundled
+  // locally in assets/habitat-icons/ - hotlinking archives.bulbagarden.net
+  // directly returned inconsistent 403s (Cloudflare-fronted, no CORS/hotlink
+  // allowance), so these are downloaded copies rather than remote refs.
+  // https://bulbapedia.bulbagarden.net/wiki/List_of_Pok%C3%A9mon_by_habitat
+  const HABITAT_ICON_URLS = {
+    cave: "assets/habitat-icons/cave.png",
+    forest: "assets/habitat-icons/forest.png",
+    grassland: "assets/habitat-icons/grassland.png",
+    mountain: "assets/habitat-icons/mountain.png",
+    rare: "assets/habitat-icons/rare.png",
+    "rough-terrain": "assets/habitat-icons/rough-terrain.png",
+    sea: "assets/habitat-icons/sea.png",
+    urban: "assets/habitat-icons/urban.png",
+    "waters-edge": "assets/habitat-icons/waters-edge.png",
+  };
+
   const grid = document.getElementById("grid");
   const searchInput = document.getElementById("search");
   const typeFilterBtn = document.getElementById("type-filter-btn");
@@ -55,6 +73,7 @@
   let selectedStages = new Set(); // always OR: a Pokémon belongs to exactly one evolution stage
   let selectedEggGroups = new Set(); // OR: matches if the species has any selected group
   let selectedHabitats = new Set(); // always OR: a species has at most one habitat
+  let excludedHabitats = new Set();
   let fullyEvolvedFilter = "any"; // "any" | "only" (fully evolved) | "exclude" (hide fully evolved)
   let evolvesIntoMap = new Map(); // parent speciesName -> [{ id, name, sprite, methods }]
 
@@ -133,15 +152,43 @@
       </div>`;
   }
 
+  // Non-default forms (Mega, Gigantamax, regional variants, ...) often carry
+  // a later generation than their species (Mega Venusaur is Gen VI though
+  // Venusaur is Gen I). Sorting straight by dex number would interleave them
+  // right after their base species, fragmenting a form's true generation
+  // into a one-off block of its own. Instead each generation's block holds
+  // its base/default entries in dex order, with any variant forms actually
+  // belonging to that generation appended at the end of the same block -
+  // dex order is preserved within both parts since Array#sort is stable.
+  function groupByGeneration(entries, desc) {
+    const gens = desc ? [...GEN_ORDER].reverse() : GEN_ORDER;
+    const buckets = new Map(gens.map((g) => [g, { base: [], forms: [] }]));
+    for (const e of entries) {
+      const bucket = buckets.get(e.generation);
+      if (!bucket) continue;
+      (e.isDefault ? bucket.base : bucket.forms).push(e);
+    }
+    const ordered = [];
+    for (const g of gens) {
+      const bucket = buckets.get(g);
+      ordered.push(...bucket.base, ...bucket.forms);
+    }
+    return ordered;
+  }
+
   function renderGrid() {
     // Generation separators only make sense when the grid is actually grouped
     // by generation, which is only guaranteed when sorted by dex number -
     // name/BST sorts interleave generations, where a separator per row would
     // just be noise.
     const showGenSeparators = sortSelect.value.startsWith("id-");
+    const ordered = showGenSeparators
+      ? groupByGeneration(filtered, sortSelect.value.endsWith("desc"))
+      : filtered;
+
     let lastGen = null;
     const parts = [];
-    for (const e of filtered) {
+    for (const e of ordered) {
       if (showGenSeparators && e.generation !== lastGen) {
         lastGen = e.generation;
         parts.push(
@@ -168,8 +215,15 @@
       selectedStages.size > 0 ||
       selectedEggGroups.size > 0 ||
       selectedHabitats.size > 0 ||
+      excludedHabitats.size > 0 ||
       fullyEvolvedFilter !== "any"
     );
+  }
+
+  function matchesHabitat(habitat) {
+    if (excludedHabitats.size > 0 && excludedHabitats.has(habitat)) return false;
+    if (selectedHabitats.size === 0) return true;
+    return selectedHabitats.has(habitat);
   }
 
   function matchesSelectedTypes(entryTypes) {
@@ -202,6 +256,7 @@
       selectedStages.size > 0 ||
       selectedEggGroups.size > 0 ||
       selectedHabitats.size > 0 ||
+      excludedHabitats.size > 0 ||
       fullyEvolvedFilter !== "any";
 
     filtered = flatEntries.filter((e) => {
@@ -210,7 +265,7 @@
       if (selectedGens.size > 0 && !selectedGens.has(e.generation)) return false;
       if (selectedStages.size > 0 && !selectedStages.has(e.evolutionStage)) return false;
       if (selectedEggGroups.size > 0 && !e.eggGroups.some((g) => selectedEggGroups.has(g))) return false;
-      if (selectedHabitats.size > 0 && !selectedHabitats.has(e.habitat)) return false;
+      if (!matchesHabitat(e.habitat)) return false;
       if (fullyEvolvedFilter === "only" && !e.fullyEvolved) return false;
       if (fullyEvolvedFilter === "exclude" && e.fullyEvolved) return false;
       if (q) {
@@ -283,10 +338,12 @@
 
     habitatOptions.innerHTML = [...habitats]
       .sort()
-      .map(
-        (h) =>
-          `<button class="gen-option" data-habitat="${h}" type="button">${capitalize(h)}</button>`,
-      )
+      .map((h) => {
+        const icon = HABITAT_ICON_URLS[h]
+          ? `<img class="habitat-icon" src="${HABITAT_ICON_URLS[h]}" alt="" loading="lazy" />`
+          : "";
+        return `<button class="gen-option" data-habitat="${h}" type="button">${icon}${capitalize(h)}</button>`;
+      })
       .join("");
   }
 
@@ -384,16 +441,21 @@
   }
 
   function updateHabitatFilterBtn() {
-    if (selectedHabitats.size === 0) {
+    if (selectedHabitats.size === 0 && excludedHabitats.size === 0) {
       habitatFilterBtn.textContent = "Any habitat";
       return;
     }
-    habitatFilterBtn.textContent = [...selectedHabitats].map(capitalize).join(", ");
+    let label = selectedHabitats.size > 0 ? [...selectedHabitats].map(capitalize).join(", ") : "Any habitat";
+    if (excludedHabitats.size > 0) {
+      label += ` − ${[...excludedHabitats].map(capitalize).join(", ")}`;
+    }
+    habitatFilterBtn.textContent = label;
   }
 
   function renderHabitatOptionStates() {
     habitatOptions.querySelectorAll(".gen-option").forEach((btn) => {
       btn.classList.toggle("selected", selectedHabitats.has(btn.dataset.habitat));
+      btn.classList.toggle("excluded", excludedHabitats.has(btn.dataset.habitat));
     });
   }
 
@@ -785,8 +847,15 @@
     const btn = e.target.closest(".gen-option");
     if (!btn) return;
     const habitat = btn.dataset.habitat;
-    if (selectedHabitats.has(habitat)) selectedHabitats.delete(habitat);
-    else selectedHabitats.add(habitat);
+    // Cycle: neutral -> include -> exclude -> neutral
+    if (selectedHabitats.has(habitat)) {
+      selectedHabitats.delete(habitat);
+      excludedHabitats.add(habitat);
+    } else if (excludedHabitats.has(habitat)) {
+      excludedHabitats.delete(habitat);
+    } else {
+      selectedHabitats.add(habitat);
+    }
     renderHabitatOptionStates();
     updateHabitatFilterBtn();
     applyFilters();
@@ -794,6 +863,7 @@
 
   habitatClearBtn.addEventListener("click", () => {
     selectedHabitats.clear();
+    excludedHabitats.clear();
     renderHabitatOptionStates();
     updateHabitatFilterBtn();
     applyFilters();
@@ -834,6 +904,7 @@
     selectedStages.clear();
     selectedEggGroups.clear();
     selectedHabitats.clear();
+    excludedHabitats.clear();
     fullyEvolvedFilter = "any";
 
     typeFilterPanel.querySelectorAll(".mode-btn").forEach((b) => {
