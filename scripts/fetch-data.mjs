@@ -39,28 +39,42 @@ function englishGenus(species) {
   return g ? g.genus : "";
 }
 
-const FORM_LABELS = {
+function englishSpeciesName(species) {
+  const n = species.names.find((e) => e.language.name === "en");
+  return n ? n.name : species.name;
+}
+
+// Short tab/badge labels are generated word-by-word from the variety slug
+// (not from PokeAPI's own form_names, which are inconsistently either a
+// short qualifier like "Noice Face" or, for unofficial/datamined forms, a
+// full duplicate of the display name like "Mega Meganium" - unsuitable for
+// a compact tab). Known tokens get a proper adjective form; everything else
+// is title-cased, with numeric segments read as percentages (Zygarde's
+// "10"/"50" forms) since that's the only place PokeAPI uses bare numbers.
+const WORD_LABELS = {
   mega: "Mega",
-  "mega-x": "Mega X",
-  "mega-y": "Mega Y",
-  "mega-z": "Mega Z",
   gmax: "Gigantamax",
   alola: "Alolan",
   galar: "Galarian",
   hisui: "Hisuian",
   paldea: "Paldean",
+  phd: "PhD",
 };
+const LOWERCASE_WORDS = new Set(["of"]);
 
-function buildFormLabel(varietyName, speciesName, isDefault) {
-  if (isDefault) return "Base";
+function buildFormLabel(varietyName, speciesName) {
   const prefix = `${speciesName}-`;
   const suffix = varietyName.startsWith(prefix)
     ? varietyName.slice(prefix.length)
     : varietyName;
-  if (FORM_LABELS[suffix]) return FORM_LABELS[suffix];
   return suffix
     .split("-")
-    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+    .map((w, i) => {
+      if (WORD_LABELS[w]) return WORD_LABELS[w];
+      if (/^\d+$/.test(w)) return `${w}%`;
+      if (i > 0 && LOWERCASE_WORDS.has(w)) return w;
+      return w.charAt(0).toUpperCase() + w.slice(1);
+    })
     .join(" ");
 }
 
@@ -69,7 +83,10 @@ function buildFormLabel(varietyName, speciesName, isDefault) {
 // Ash-Greninja resolves to Sun/Moon despite Greninja being Gen VI) so the
 // species-level generation is not reliable per form. Resolve the real one via
 // pokemon-form -> version_group -> generation, caching version_group lookups
-// since most forms share a handful of them.
+// since most forms share a handful of them. The same pokemon-form resource
+// also carries PokeAPI's own curated English display name (e.g. "10% Zygarde",
+// "Noice Eiscue", "Totem Alolan Raticate") which is far more reliable than
+// reconstructing one from the slug, so grab that here too.
 const versionGroupGenCache = new Map();
 
 function getGenerationForVersionGroup(vgUrl) {
@@ -82,17 +99,21 @@ function getGenerationForVersionGroup(vgUrl) {
   return versionGroupGenCache.get(vgUrl);
 }
 
-async function resolveFormGeneration(pokemon, speciesGeneration) {
+async function resolveFormMeta(pokemon, speciesGeneration) {
   const formRef = pokemon.forms && pokemon.forms[0];
-  if (!formRef) return speciesGeneration;
+  if (!formRef) return { generation: speciesGeneration, fullName: null };
   const form = await fetchJson(formRef.url);
-  if (!form.version_group) return speciesGeneration;
-  return getGenerationForVersionGroup(form.version_group.url);
+  const generation = form.version_group
+    ? await getGenerationForVersionGroup(form.version_group.url)
+    : speciesGeneration;
+  const fullName = form.names.find((n) => n.language.name === "en")?.name || null;
+  return { generation, fullName };
 }
 
 async function buildForm(variety, species) {
   const pokemon = await fetchJson(variety.pokemon.url);
-  const generation = await resolveFormGeneration(pokemon, species.generation.name);
+  const meta = await resolveFormMeta(pokemon, species.generation.name);
+  const label = variety.is_default ? "Base" : buildFormLabel(pokemon.name, species.name);
 
   const stats = {};
   for (const s of pokemon.stats) {
@@ -101,9 +122,14 @@ async function buildForm(variety, species) {
 
   return {
     slug: pokemon.name,
-    label: buildFormLabel(pokemon.name, species.name, variety.is_default),
+    label,
+    // Full display name for non-default forms (e.g. "Noice Eiscue",
+    // "10% Zygarde"), straight from PokeAPI's own English translation with
+    // a template fallback if one isn't available. Unused for default forms,
+    // which always display as the bare species name instead.
+    fullName: variety.is_default ? null : meta.fullName || `${label} ${species.name}`,
     isDefault: variety.is_default,
-    generation,
+    generation: meta.generation,
     height: pokemon.height, // decimetres
     weight: pokemon.weight, // hectograms
     types: pokemon.types.map((t) => t.type.name),
@@ -176,6 +202,7 @@ async function buildEntry(listItem) {
     // form's label ends up with the default form's own qualifier stuck
     // to it (e.g. "Sandy Wormadam Plant" instead of "Sandy Wormadam").
     speciesName: species.name,
+    speciesDisplayName: englishSpeciesName(species),
     height: defaultForm.height,
     weight: defaultForm.weight,
     types: defaultForm.types,

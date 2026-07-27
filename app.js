@@ -62,25 +62,24 @@
     return `<span class="type-badge" style="background:var(--type-${type})">${type}</span>`;
   }
 
-  function formDisplayName(speciesName, form) {
-    if (form.isDefault) return speciesName;
-    // Forms whose slug already reads naturally (e.g. "greninja-ash" -> "Ash")
-    // are templated as "Label Species"; this covers Mega/Gmax/regional forms
-    // well and is a reasonable default for everything else too.
-    return `${form.label} ${speciesName}`;
+  function formDisplayName(speciesDisplayName, form) {
+    // Default forms always show as the bare species name (e.g. "Eiscue", not
+    // "Ice Eiscue") so the unfiltered grid stays clean; non-default forms use
+    // PokeAPI's own curated full name (e.g. "Noice Eiscue", "10% Zygarde").
+    return form.isDefault ? speciesDisplayName : form.fullName;
   }
 
   function buildFlatEntries() {
     const entries = [];
     for (const species of allPokemon) {
-      const speciesName = species.speciesName.replace(/-/g, " ");
+      const speciesDisplayName = species.speciesDisplayName;
       for (const form of species.forms) {
         entries.push({
           speciesId: species.id,
           formSlug: form.slug,
           isDefault: form.isDefault,
           label: form.label,
-          name: formDisplayName(speciesName, form),
+          name: formDisplayName(speciesDisplayName, form),
           types: form.types,
           sprite: form.sprite,
           generation: form.generation,
@@ -313,11 +312,11 @@
   }
 
   function renderVariantHeader(species, form) {
-    const speciesName = species.speciesName.replace(/-/g, " ");
+    const name = formDisplayName(species.speciesDisplayName, form);
     return `
-      <img src="${form.sprite}" alt="${formDisplayName(speciesName, form)}" />
+      <img src="${form.sprite}" alt="${name}" />
       <div class="dex-number">${dexNumber(species.id)}</div>
-      <div class="name">${formDisplayName(speciesName, form)}</div>
+      <div class="name">${name}</div>
       ${species.genus ? `<div class="genus">${species.genus}</div>` : ""}
       <div class="types">${form.types.map(typeBadge).join("")}</div>
     `;

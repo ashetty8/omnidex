@@ -359,7 +359,6 @@ body {
   font-weight: 600;
   font-size: 0.95rem;
   line-height: 1.2;
-  text-transform: capitalize;
   margin-top: 2px;
   min-height: 2.4em;
   display: -webkit-box;
@@ -370,12 +369,19 @@ body {
 
 .card .types {
   display: flex;
-  gap: 6px;
+  gap: 5px;
   margin-top: 8px;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   justify-content: center;
-  align-content: flex-start;
-  min-height: 44px;
+  align-items: center;
+  height: 20px;
+  overflow: hidden;
+}
+
+.card .type-badge {
+  font-size: 0.58rem;
+  padding: 2px 6px;
+  letter-spacing: 0.02em;
 }
 
 .type-badge {
@@ -456,7 +462,6 @@ body {
 .modal-header .name {
   font-size: 1.4rem;
   font-weight: 700;
-  text-transform: capitalize;
   margin: 2px 0 4px;
 }
 
