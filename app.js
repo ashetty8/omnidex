@@ -73,7 +73,7 @@
   function buildFlatEntries() {
     const entries = [];
     for (const species of allPokemon) {
-      const speciesName = species.name.replace(/-/g, " ");
+      const speciesName = species.speciesName.replace(/-/g, " ");
       for (const form of species.forms) {
         entries.push({
           speciesId: species.id,
@@ -313,7 +313,7 @@
   }
 
   function renderVariantHeader(species, form) {
-    const speciesName = species.name.replace(/-/g, " ");
+    const speciesName = species.speciesName.replace(/-/g, " ");
     return `
       <img src="${form.sprite}" alt="${formDisplayName(speciesName, form)}" />
       <div class="dex-number">${dexNumber(species.id)}</div>

@@ -169,6 +169,13 @@ async function buildEntry(listItem) {
   return {
     id,
     name: defaultForm.slug,
+    // The bare species slug (e.g. "wormadam"), distinct from `name` above
+    // which is the *default form's* slug (e.g. "wormadam-plant") for
+    // species where the default variety isn't unqualified. Form display
+    // names must be built from this, not from `name`, or every other
+    // form's label ends up with the default form's own qualifier stuck
+    // to it (e.g. "Sandy Wormadam Plant" instead of "Sandy Wormadam").
+    speciesName: species.name,
     height: defaultForm.height,
     weight: defaultForm.weight,
     types: defaultForm.types,
