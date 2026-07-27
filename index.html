@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Pokedex</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header class="site-header">
+    <h1>Pokedex</h1>
+    <div class="controls">
+      <input
+        id="search"
+        type="search"
+        placeholder="Search by name or #..."
+        autocomplete="off"
+      />
+      <div class="type-filter-wrap">
+        <button id="type-filter-btn" class="filter-btn" type="button" aria-haspopup="true" aria-expanded="false">All types</button>
+        <div id="type-filter-panel" class="type-filter-panel hidden">
+          <div class="type-mode-toggle">
+            <button class="mode-btn active" data-mode="any" type="button">Any</button>
+            <button class="mode-btn" data-mode="all" type="button">All</button>
+          </div>
+          <div id="type-options" class="type-options"></div>
+          <p class="type-hint">Click to include, click again to exclude</p>
+          <button id="type-clear-btn" class="type-clear-btn" type="button">Clear types</button>
+        </div>
+      </div>
+      <div class="type-filter-wrap">
+        <button id="gen-filter-btn" class="filter-btn" type="button" aria-haspopup="true" aria-expanded="false">All generations</button>
+        <div id="gen-filter-panel" class="type-filter-panel hidden">
+          <div id="gen-options" class="type-options gen-options"></div>
+          <button id="gen-clear-btn" class="type-clear-btn" type="button">Clear generations</button>
+        </div>
+      </div>
+      <div class="type-filter-wrap">
+        <button id="stage-filter-btn" class="filter-btn" type="button" aria-haspopup="true" aria-expanded="false">Any stage</button>
+        <div id="stage-filter-panel" class="type-filter-panel hidden">
+          <div id="stage-options" class="type-options gen-options"></div>
+          <button id="stage-clear-btn" class="type-clear-btn" type="button">Clear stage</button>
+        </div>
+      </div>
+      <button id="fully-evolved-toggle" class="toggle-btn" type="button" aria-pressed="false">Fully evolved only</button>
+      <select id="sort-select">
+        <option value="id-asc">Number (low-high)</option>
+        <option value="id-desc">Number (high-low)</option>
+        <option value="name-asc">Name (A-Z)</option>
+        <option value="name-desc">Name (Z-A)</option>
+      </select>
+      <button id="clear-all-btn" class="clear-all-btn" type="button">Clear filters</button>
+    </div>
+    <p id="result-count" class="result-count"></p>
+  </header>
+
+  <main id="grid" class="grid"></main>
+  <p id="empty-state" class="empty-state hidden">No Pokémon match your search.</p>
+
+  <div id="modal-overlay" class="modal-overlay hidden">
+    <div class="modal" role="dialog" aria-modal="true">
+      <button id="modal-close" class="modal-close" aria-label="Close">&times;</button>
+      <div id="modal-content"></div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
