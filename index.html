@@ -3,12 +3,12 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Pokedex</title>
+  <title>Omnidex</title>
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
   <header class="site-header">
-    <h1>Pokedex</h1>
+    <h1>Omnidex</h1>
     <div class="controls">
       <input
         id="search"
@@ -22,6 +22,7 @@
           <div class="type-mode-toggle">
             <button class="mode-btn active" data-mode="any" type="button">Any</button>
             <button class="mode-btn" data-mode="all" type="button">All</button>
+            <button class="mode-btn" data-mode="mono" type="button">Only</button>
           </div>
           <div id="type-options" class="type-options"></div>
           <p class="type-hint">Click to include, click again to exclude</p>
@@ -42,12 +43,28 @@
           <button id="stage-clear-btn" class="type-clear-btn" type="button">Clear stage</button>
         </div>
       </div>
+      <div class="type-filter-wrap">
+        <button id="egg-filter-btn" class="filter-btn" type="button" aria-haspopup="true" aria-expanded="false">Any egg group</button>
+        <div id="egg-filter-panel" class="type-filter-panel hidden">
+          <div id="egg-options" class="type-options gen-options"></div>
+          <button id="egg-clear-btn" class="type-clear-btn" type="button">Clear egg groups</button>
+        </div>
+      </div>
+      <div class="type-filter-wrap">
+        <button id="habitat-filter-btn" class="filter-btn" type="button" aria-haspopup="true" aria-expanded="false">Any habitat</button>
+        <div id="habitat-filter-panel" class="type-filter-panel hidden">
+          <div id="habitat-options" class="type-options gen-options"></div>
+          <button id="habitat-clear-btn" class="type-clear-btn" type="button">Clear habitat</button>
+        </div>
+      </div>
       <button id="fully-evolved-toggle" class="toggle-btn" type="button" aria-pressed="false">Fully evolved only</button>
       <select id="sort-select">
         <option value="id-asc">Number (low-high)</option>
         <option value="id-desc">Number (high-low)</option>
         <option value="name-asc">Name (A-Z)</option>
         <option value="name-desc">Name (Z-A)</option>
+        <option value="bst-desc">Base stat total (high-low)</option>
+        <option value="bst-asc">Base stat total (low-high)</option>
       </select>
       <button id="clear-all-btn" class="clear-all-btn" type="button">Clear filters</button>
     </div>

@@ -44,6 +44,76 @@ function englishSpeciesName(species) {
   return n ? n.name : species.name;
 }
 
+function titleCase(slug) {
+  return slug
+    .split("-")
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(" ");
+}
+
+const STAT_KEYS = {
+  hp: "hp",
+  attack: "attack",
+  defense: "defense",
+  "special-attack": "specialAttack",
+  "special-defense": "specialDefense",
+  speed: "speed",
+};
+
+// Attacking-type -> defending-type damage multiplier, built once from all 18
+// battle types (PokeAPI also lists "unknown"/"shadow", which never appear on
+// an actual Pokemon's type list and have no complete damage_relations, so
+// they're skipped). Each form's matchups are the product across its 1-2
+// types, so this table is computed once and reused for all 1025 species
+// rather than refetched per Pokemon.
+const NON_BATTLE_TYPES = new Set(["unknown", "shadow"]);
+
+async function loadTypeChart() {
+  const list = await fetchJson(`${BASE}/type?limit=30`);
+  const chart = {};
+  await Promise.all(
+    list.results
+      .filter((t) => !NON_BATTLE_TYPES.has(t.name))
+      .map(async (t) => {
+        const data = await fetchJson(t.url);
+        chart[t.name] = {};
+        data.damage_relations.double_damage_to.forEach((d) => (chart[t.name][d.name] = 2));
+        data.damage_relations.half_damage_to.forEach((d) => (chart[t.name][d.name] = 0.5));
+        data.damage_relations.no_damage_to.forEach((d) => (chart[t.name][d.name] = 0));
+      }),
+  );
+  return chart;
+}
+
+function computeTypeEffectiveness(types, chart) {
+  const result = {};
+  for (const attackType of Object.keys(chart)) {
+    result[attackType] = types.reduce((mult, defType) => {
+      const m = chart[attackType][defType];
+      return mult * (m === undefined ? 1 : m);
+    }, 1);
+  }
+  return result;
+}
+
+// Ability flavor/effect text lives on the ability resource, not the per-
+// Pokemon ability list, and is shared across every Pokemon with that
+// ability (367 abilities total vs. ~2.7 per form), so cache by URL.
+const abilityEffectCache = new Map();
+
+function getAbilityEffect(url) {
+  if (!abilityEffectCache.has(url)) {
+    abilityEffectCache.set(
+      url,
+      fetchJson(url).then((a) => {
+        const entry = a.effect_entries.find((e) => e.language.name === "en");
+        return entry ? entry.short_effect : "";
+      }),
+    );
+  }
+  return abilityEffectCache.get(url);
+}
+
 // Short tab/badge labels are generated word-by-word from the variety slug
 // (not from PokeAPI's own form_names, which are inconsistently either a
 // short qualifier like "Noice Face" or, for unofficial/datamined forms, a
@@ -110,15 +180,29 @@ async function resolveFormMeta(pokemon, speciesGeneration) {
   return { generation, fullName };
 }
 
-async function buildForm(variety, species) {
+async function buildForm(variety, species, typeChart) {
   const pokemon = await fetchJson(variety.pokemon.url);
   const meta = await resolveFormMeta(pokemon, species.generation.name);
   const label = variety.is_default ? "Base" : buildFormLabel(pokemon.name, species.name);
 
   const stats = {};
+  const evYield = [];
   for (const s of pokemon.stats) {
     stats[s.stat.name] = s.base_stat;
+    if (s.effort > 0) {
+      evYield.push({ stat: STAT_KEYS[s.stat.name] || s.stat.name, value: s.effort });
+    }
   }
+  const bst = Object.values(stats).reduce((a, b) => a + b, 0);
+  const types = pokemon.types.map((t) => t.type.name);
+
+  const abilities = await Promise.all(
+    pokemon.abilities.map(async (a) => ({
+      name: a.ability.name,
+      hidden: a.is_hidden,
+      effect: await getAbilityEffect(a.ability.url),
+    })),
+  );
 
   return {
     slug: pokemon.name,
@@ -132,11 +216,8 @@ async function buildForm(variety, species) {
     generation: meta.generation,
     height: pokemon.height, // decimetres
     weight: pokemon.weight, // hectograms
-    types: pokemon.types.map((t) => t.type.name),
-    abilities: pokemon.abilities.map((a) => ({
-      name: a.ability.name,
-      hidden: a.is_hidden,
-    })),
+    types,
+    abilities,
     stats: {
       hp: stats.hp ?? 0,
       attack: stats.attack ?? 0,
@@ -145,6 +226,11 @@ async function buildForm(variety, species) {
       specialDefense: stats["special-defense"] ?? 0,
       speed: stats.speed ?? 0,
     },
+    bst,
+    evYield,
+    baseExperience: pokemon.base_experience ?? null,
+    typeEffectiveness: computeTypeEffectiveness(types, typeChart),
+    cry: pokemon.cries?.latest || pokemon.cries?.legacy || null,
     sprite:
       pokemon.sprites.other?.["official-artwork"]?.front_default ||
       pokemon.sprites.front_default ||
@@ -153,6 +239,7 @@ async function buildForm(variety, species) {
       pokemon.sprites.other?.["official-artwork"]?.front_shiny ||
       pokemon.sprites.front_shiny ||
       "",
+    spriteDreamWorld: pokemon.sprites.other?.dream_world?.front_default || null,
   };
 }
 
@@ -162,9 +249,58 @@ async function buildForm(variety, species) {
 // species) so cache by chain URL instead of re-walking it per species.
 const evolutionChainCache = new Map();
 
-function walkEvolutionChain(node, depth, map) {
-  map.set(node.species.name, { stage: depth, fullyEvolved: node.evolves_to.length === 0 });
-  node.evolves_to.forEach((child) => walkEvolutionChain(child, depth + 1, map));
+// evolution_details describes how to reach a *child* node from its parent,
+// as a list of alternative (OR'd) conditions - e.g. Eevee's evolutions each
+// have one, but some Pokemon (e.g. Tyrogue) have several ways to reach the
+// same evolution. Rendered as short human-readable strings rather than kept
+// as raw PokeAPI fields since those are ~15 sparse, inconsistently-shaped
+// keys per condition.
+function describeEvolutionDetail(d) {
+  const parts = [];
+  if (d.min_level) parts.push(`Level ${d.min_level}`);
+  if (d.item) parts.push(`use ${titleCase(d.item.name)}`);
+  if (d.held_item) parts.push(`holding ${titleCase(d.held_item.name)}`);
+  if (d.known_move) parts.push(`knowing ${titleCase(d.known_move.name)}`);
+  if (d.known_move_type) parts.push(`knowing a ${titleCase(d.known_move_type.name)}-type move`);
+  if (d.min_happiness) parts.push(`happiness ${d.min_happiness}+`);
+  if (d.min_affection) parts.push(`affection ${d.min_affection}+`);
+  if (d.min_beauty) parts.push(`beauty ${d.min_beauty}+`);
+  if (d.relative_physical_stats === 1) parts.push("Attack > Defense");
+  if (d.relative_physical_stats === -1) parts.push("Defense > Attack");
+  if (d.relative_physical_stats === 0) parts.push("Attack = Defense");
+  if (d.time_of_day) parts.push(`during ${d.time_of_day}`);
+  if (d.location) parts.push(`at ${titleCase(d.location.name)}`);
+  if (d.needs_overworld_rain) parts.push("while raining");
+  if (d.turn_upside_down) parts.push("console upside down");
+  if (d.party_species) parts.push(`with ${titleCase(d.party_species.name)} in party`);
+  if (d.party_type) parts.push(`with a ${titleCase(d.party_type.name)}-type in party`);
+  if (d.trade_species) parts.push(`traded for ${titleCase(d.trade_species.name)}`);
+  if (d.gender === 1) parts.push("(female)");
+  if (d.gender === 2) parts.push("(male)");
+
+  if (parts.length === 0 && d.trigger) {
+    parts.push(titleCase(d.trigger.name.replace(/-/g, " ")));
+  }
+  const trigger = d.trigger?.name;
+  if (trigger === "trade" && !parts.some((p) => p.toLowerCase().includes("trad"))) {
+    parts.unshift("Trade");
+  } else if (trigger === "level-up" && !d.min_level && parts.length && !parts[0].startsWith("Level")) {
+    parts.unshift("Level up");
+  }
+  return parts.join(", ");
+}
+
+function walkEvolutionChain(node, depth, map, parentName) {
+  map.set(node.species.name, {
+    stage: depth,
+    fullyEvolved: node.evolves_to.length === 0,
+    evolvesFrom: parentName,
+    evolutionMethods: [],
+  });
+  node.evolves_to.forEach((child) => {
+    walkEvolutionChain(child, depth + 1, map, node.species.name);
+    map.get(child.species.name).evolutionMethods = child.evolution_details.map(describeEvolutionDetail);
+  });
 }
 
 function resolveEvolutionChain(url) {
@@ -173,7 +309,7 @@ function resolveEvolutionChain(url) {
       url,
       fetchJson(url).then((data) => {
         const map = new Map();
-        walkEvolutionChain(data.chain, 1, map);
+        walkEvolutionChain(data.chain, 1, map, null);
         return map;
       }),
     );
@@ -181,16 +317,21 @@ function resolveEvolutionChain(url) {
   return evolutionChainCache.get(url);
 }
 
-async function buildEntry(listItem) {
+async function buildEntry(listItem, typeChart) {
   const id = Number(listItem.url.split("/").filter(Boolean).pop());
   const species = await fetchJson(`${BASE}/pokemon-species/${id}`);
   const forms = await Promise.all(
-    species.varieties.map((v) => buildForm(v, species)),
+    species.varieties.map((v) => buildForm(v, species, typeChart)),
   );
   const defaultForm = forms.find((f) => f.isDefault) || forms[0];
 
   const chainMap = await resolveEvolutionChain(species.evolution_chain.url);
-  const evoInfo = chainMap.get(species.name) || { stage: 1, fullyEvolved: true };
+  const evoInfo = chainMap.get(species.name) || {
+    stage: 1,
+    fullyEvolved: true,
+    evolvesFrom: null,
+    evolutionMethods: [],
+  };
 
   return {
     id,
@@ -208,8 +349,14 @@ async function buildEntry(listItem) {
     types: defaultForm.types,
     abilities: defaultForm.abilities,
     stats: defaultForm.stats,
+    bst: defaultForm.bst,
+    evYield: defaultForm.evYield,
+    baseExperience: defaultForm.baseExperience,
+    typeEffectiveness: defaultForm.typeEffectiveness,
+    cry: defaultForm.cry,
     sprite: defaultForm.sprite,
     spriteShiny: defaultForm.spriteShiny,
+    spriteDreamWorld: defaultForm.spriteDreamWorld,
     generation: species.generation.name,
     color: species.color?.name || "",
     genus: englishGenus(species),
@@ -218,18 +365,33 @@ async function buildEntry(listItem) {
     mythical: species.is_mythical,
     evolutionStage: evoInfo.stage,
     fullyEvolved: evoInfo.fullyEvolved,
+    evolvesFrom: evoInfo.evolvesFrom,
+    evolutionMethods: evoInfo.evolutionMethods,
+    // Breeding & training facets, all straight off pokemon-species.
+    captureRate: species.capture_rate,
+    baseHappiness: species.base_happiness,
+    growthRate: species.growth_rate?.name || "",
+    eggGroups: species.egg_groups.map((g) => g.name),
+    // Eighths female (0-8); -1 means genderless.
+    genderRate: species.gender_rate,
+    hatchCounter: species.hatch_counter,
+    habitat: species.habitat?.name || null,
+    shape: species.shape?.name || null,
     forms,
   };
 }
 
 async function main() {
+  console.log("Fetching type chart...");
+  const typeChart = await loadTypeChart();
+
   console.log("Fetching pokemon species list...");
   const list = await fetchJson(`${BASE}/pokemon-species?limit=2000`);
   console.log(`Found ${list.results.length} pokemon. Fetching details...`);
 
   let done = 0;
   const entries = await mapLimit(list.results, CONCURRENCY, async (item) => {
-    const entry = await buildEntry(item);
+    const entry = await buildEntry(item, typeChart);
     done++;
     if (done % 100 === 0) console.log(`  ${done}/${list.results.length}`);
     return entry;

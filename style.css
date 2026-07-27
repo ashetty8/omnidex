@@ -303,6 +303,27 @@ body {
   margin: 0 auto;
 }
 
+.gen-separator {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 8px 0 -2px;
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.gen-separator::before,
+.gen-separator::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}
+
 .card {
   background: var(--surface);
   border: 1px solid var(--border);
@@ -559,11 +580,18 @@ body {
 
 .abilities {
   display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.ability-item {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
 }
 
 .ability-badge {
+  align-self: flex-start;
   font-size: 0.78rem;
   background: var(--bg);
   border: 1px solid var(--border);
@@ -574,6 +602,12 @@ body {
 
 .ability-badge.hidden-ability {
   font-style: italic;
+}
+
+.ability-effect {
+  font-size: 0.78rem;
+  line-height: 1.4;
+  color: var(--text-muted);
 }
 
 .stat-row {
@@ -610,4 +644,121 @@ body {
   height: 100%;
   border-radius: 999px;
   background: var(--accent);
+}
+
+.stat-row.stat-total {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+
+.stat-row.stat-total .stat-name,
+.stat-row.stat-total .stat-value {
+  font-weight: 700;
+  color: var(--text);
+}
+
+.ev-yield {
+  margin: 10px 0 0;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.cry-btn {
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 600;
+  padding: 5px 12px;
+  margin-top: 2px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.cry-btn:hover {
+  color: var(--text);
+  border-color: var(--text-muted);
+}
+
+.matchup-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.matchup-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.matchup-label {
+  flex: none;
+  width: 68px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--text-muted);
+}
+
+.matchup-badges {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.matchup-badge {
+  font-size: 0.62rem;
+  padding: 3px 8px;
+}
+
+.info-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px 10px;
+}
+
+.info-item .label {
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  letter-spacing: 0.03em;
+}
+
+.info-item .value {
+  font-weight: 600;
+  font-size: 0.85rem;
+  text-transform: capitalize;
+}
+
+.evo-info {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.evo-row {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 6px;
+  font-size: 0.85rem;
+}
+
+.evo-row .evo-name {
+  font-weight: 600;
+}
+
+.evo-row .evo-arrow {
+  color: var(--text-muted);
+}
+
+.evo-row .evo-method {
+  flex-basis: 100%;
+  font-size: 0.78rem;
+  color: var(--text-muted);
 }

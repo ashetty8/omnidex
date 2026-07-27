@@ -10,6 +10,7 @@
     "generation-viii": "Gen VIII",
     "generation-ix": "Gen IX",
   };
+  const GEN_ORDER = Object.keys(GEN_LABELS);
 
   const grid = document.getElementById("grid");
   const searchInput = document.getElementById("search");
@@ -25,6 +26,14 @@
   const stageFilterPanel = document.getElementById("stage-filter-panel");
   const stageOptions = document.getElementById("stage-options");
   const stageClearBtn = document.getElementById("stage-clear-btn");
+  const eggFilterBtn = document.getElementById("egg-filter-btn");
+  const eggFilterPanel = document.getElementById("egg-filter-panel");
+  const eggOptions = document.getElementById("egg-options");
+  const eggClearBtn = document.getElementById("egg-clear-btn");
+  const habitatFilterBtn = document.getElementById("habitat-filter-btn");
+  const habitatFilterPanel = document.getElementById("habitat-filter-panel");
+  const habitatOptions = document.getElementById("habitat-options");
+  const habitatClearBtn = document.getElementById("habitat-clear-btn");
   const fullyEvolvedToggle = document.getElementById("fully-evolved-toggle");
   const clearAllBtn = document.getElementById("clear-all-btn");
   const sortSelect = document.getElementById("sort-select");
@@ -44,7 +53,10 @@
   let typeMode = "any"; // "any" (OR) or "all" (AND), applies to selectedTypes only
   let selectedGens = new Set(); // always OR: a Pokémon belongs to exactly one generation
   let selectedStages = new Set(); // always OR: a Pokémon belongs to exactly one evolution stage
+  let selectedEggGroups = new Set(); // OR: matches if the species has any selected group
+  let selectedHabitats = new Set(); // always OR: a species has at most one habitat
   let fullyEvolvedFilter = "any"; // "any" | "only" (fully evolved) | "exclude" (hide fully evolved)
+  let evolvesIntoMap = new Map(); // parent speciesName -> [{ id, name, sprite, methods }]
 
   function dexNumber(id) {
     return `#${String(id).padStart(3, "0")}`;
@@ -86,25 +98,59 @@
           evolutionStage: species.evolutionStage,
           fullyEvolved: species.fullyEvolved,
           dexNumber: species.id,
+          bst: form.bst,
+          eggGroups: species.eggGroups,
+          habitat: species.habitat,
         });
       }
     }
     return entries;
   }
 
-  function renderGrid() {
-    grid.innerHTML = filtered
-      .map(
-        (e) => `
+  function buildEvolvesIntoMap() {
+    const map = new Map();
+    for (const species of allPokemon) {
+      if (!species.evolvesFrom) continue;
+      if (!map.has(species.evolvesFrom)) map.set(species.evolvesFrom, []);
+      map.get(species.evolvesFrom).push({
+        id: species.id,
+        name: species.speciesDisplayName,
+        sprite: species.sprite,
+        methods: species.evolutionMethods,
+      });
+    }
+    return map;
+  }
+
+  function cardHtml(e) {
+    return `
       <div class="card" data-species="${e.speciesId}" data-form="${e.formSlug}">
         <span class="dex-number">${dexNumber(e.dexNumber)}</span>
         ${!e.isDefault ? `<span class="form-badge">${e.label}</span>` : ""}
         <img loading="lazy" src="${e.sprite}" alt="${e.name}" />
         <div class="name">${e.name}</div>
         <div class="types">${e.types.map(typeBadge).join("")}</div>
-      </div>`,
-      )
-      .join("");
+      </div>`;
+  }
+
+  function renderGrid() {
+    // Generation separators only make sense when the grid is actually grouped
+    // by generation, which is only guaranteed when sorted by dex number -
+    // name/BST sorts interleave generations, where a separator per row would
+    // just be noise.
+    const showGenSeparators = sortSelect.value.startsWith("id-");
+    let lastGen = null;
+    const parts = [];
+    for (const e of filtered) {
+      if (showGenSeparators && e.generation !== lastGen) {
+        lastGen = e.generation;
+        parts.push(
+          `<div class="gen-separator"><span>${GEN_LABELS[e.generation] || e.generation}</span></div>`,
+        );
+      }
+      parts.push(cardHtml(e));
+    }
+    grid.innerHTML = parts.join("");
 
     const totalSpecies = allPokemon.length;
     resultCount.textContent = hasActiveFilters()
@@ -120,6 +166,8 @@
       excludedTypes.size > 0 ||
       selectedGens.size > 0 ||
       selectedStages.size > 0 ||
+      selectedEggGroups.size > 0 ||
+      selectedHabitats.size > 0 ||
       fullyEvolvedFilter !== "any"
     );
   }
@@ -132,6 +180,15 @@
     if (typeMode === "all") {
       return [...selectedTypes].every((t) => entryTypes.includes(t));
     }
+    if (typeMode === "mono") {
+      // Exact match: the Pokémon's whole type list must be the selected set,
+      // no extra types - e.g. selecting just Fire only matches pure-Fire
+      // Pokémon, not Fire/Flying ones too.
+      return (
+        entryTypes.length === selectedTypes.size &&
+        [...selectedTypes].every((t) => entryTypes.includes(t))
+      );
+    }
     return [...selectedTypes].some((t) => entryTypes.includes(t));
   }
 
@@ -143,6 +200,8 @@
       excludedTypes.size > 0 ||
       selectedGens.size > 0 ||
       selectedStages.size > 0 ||
+      selectedEggGroups.size > 0 ||
+      selectedHabitats.size > 0 ||
       fullyEvolvedFilter !== "any";
 
     filtered = flatEntries.filter((e) => {
@@ -150,6 +209,8 @@
       if (!matchesSelectedTypes(e.types)) return false;
       if (selectedGens.size > 0 && !selectedGens.has(e.generation)) return false;
       if (selectedStages.size > 0 && !selectedStages.has(e.evolutionStage)) return false;
+      if (selectedEggGroups.size > 0 && !e.eggGroups.some((g) => selectedEggGroups.has(g))) return false;
+      if (selectedHabitats.size > 0 && !selectedHabitats.has(e.habitat)) return false;
       if (fullyEvolvedFilter === "only" && !e.fullyEvolved) return false;
       if (fullyEvolvedFilter === "exclude" && e.fullyEvolved) return false;
       if (q) {
@@ -166,6 +227,8 @@
       if (key === "id") {
         cmp = a.dexNumber - b.dexNumber;
         if (cmp === 0) cmp = a.isDefault === b.isDefault ? 0 : a.isDefault ? -1 : 1;
+      } else if (key === "bst") {
+        cmp = a.bst - b.bst;
       } else {
         cmp = a.name.localeCompare(b.name);
       }
@@ -179,10 +242,14 @@
     const types = new Set();
     const gens = new Set();
     const stages = new Set();
+    const eggGroups = new Set();
+    const habitats = new Set();
     flatEntries.forEach((e) => {
       e.types.forEach((t) => types.add(t));
       gens.add(e.generation);
       stages.add(e.evolutionStage);
+      e.eggGroups.forEach((g) => eggGroups.add(g));
+      if (e.habitat) habitats.add(e.habitat);
     });
 
     typeOptions.innerHTML = [...types]
@@ -194,7 +261,7 @@
       .join("");
 
     genOptions.innerHTML = [...gens]
-      .sort((a, b) => a.localeCompare(b))
+      .sort((a, b) => GEN_ORDER.indexOf(a) - GEN_ORDER.indexOf(b))
       .map(
         (g) =>
           `<button class="gen-option" data-gen="${g}" type="button">${GEN_LABELS[g] || g}</button>`,
@@ -204,6 +271,22 @@
     stageOptions.innerHTML = [...stages]
       .sort((a, b) => a - b)
       .map((s) => `<button class="gen-option" data-stage="${s}" type="button">Stage ${s}</button>`)
+      .join("");
+
+    eggOptions.innerHTML = [...eggGroups]
+      .sort()
+      .map(
+        (g) =>
+          `<button class="gen-option" data-egg="${g}" type="button">${capitalize(g)}</button>`,
+      )
+      .join("");
+
+    habitatOptions.innerHTML = [...habitats]
+      .sort()
+      .map(
+        (h) =>
+          `<button class="gen-option" data-habitat="${h}" type="button">${capitalize(h)}</button>`,
+      )
       .join("");
   }
 
@@ -216,7 +299,7 @@
       typeFilterBtn.textContent = "All types";
       return;
     }
-    const joiner = typeMode === "all" ? " + " : ", ";
+    const joiner = typeMode === "all" || typeMode === "mono" ? " + " : ", ";
     let label = selectedTypes.size > 0 ? [...selectedTypes].map(capitalize).join(joiner) : "All types";
     if (excludedTypes.size > 0) {
       label += ` − ${[...excludedTypes].map(capitalize).join(", ")}`;
@@ -280,6 +363,46 @@
     stageFilterBtn.setAttribute("aria-expanded", String(willShow));
   }
 
+  function updateEggFilterBtn() {
+    if (selectedEggGroups.size === 0) {
+      eggFilterBtn.textContent = "Any egg group";
+      return;
+    }
+    eggFilterBtn.textContent = [...selectedEggGroups].map(capitalize).join(", ");
+  }
+
+  function renderEggOptionStates() {
+    eggOptions.querySelectorAll(".gen-option").forEach((btn) => {
+      btn.classList.toggle("selected", selectedEggGroups.has(btn.dataset.egg));
+    });
+  }
+
+  function toggleEggPanel(show) {
+    const willShow = show ?? eggFilterPanel.classList.contains("hidden");
+    eggFilterPanel.classList.toggle("hidden", !willShow);
+    eggFilterBtn.setAttribute("aria-expanded", String(willShow));
+  }
+
+  function updateHabitatFilterBtn() {
+    if (selectedHabitats.size === 0) {
+      habitatFilterBtn.textContent = "Any habitat";
+      return;
+    }
+    habitatFilterBtn.textContent = [...selectedHabitats].map(capitalize).join(", ");
+  }
+
+  function renderHabitatOptionStates() {
+    habitatOptions.querySelectorAll(".gen-option").forEach((btn) => {
+      btn.classList.toggle("selected", selectedHabitats.has(btn.dataset.habitat));
+    });
+  }
+
+  function toggleHabitatPanel(show) {
+    const willShow = show ?? habitatFilterPanel.classList.contains("hidden");
+    habitatFilterPanel.classList.toggle("hidden", !willShow);
+    habitatFilterBtn.setAttribute("aria-expanded", String(willShow));
+  }
+
   function updateFullyEvolvedToggle() {
     fullyEvolvedToggle.classList.toggle("active", fullyEvolvedFilter === "only");
     fullyEvolvedToggle.classList.toggle("excluded", fullyEvolvedFilter === "exclude");
@@ -296,6 +419,142 @@
         <span class="stat-value">${value}</span>
         <div class="stat-bar-track"><div class="stat-bar-fill" style="width:${pct}%"></div></div>
       </div>`;
+  }
+
+  function totalStatRow(bst) {
+    return `
+      <div class="stat-row stat-total">
+        <span class="stat-name">Total</span>
+        <span class="stat-value">${bst}</span>
+        <div></div>
+      </div>`;
+  }
+
+  const EV_STAT_LABELS = {
+    hp: "HP",
+    attack: "Attack",
+    defense: "Defense",
+    specialAttack: "Sp. Atk",
+    specialDefense: "Sp. Def",
+    speed: "Speed",
+  };
+
+  function evYieldText(evYield) {
+    if (!evYield || !evYield.length) return "";
+    const parts = evYield.map((e) => `+${e.value} ${EV_STAT_LABELS[e.stat] || e.stat}`);
+    return `<p class="ev-yield">EV yield: ${parts.join(", ")}</p>`;
+  }
+
+  function titleCase(slug) {
+    return slug.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+  }
+
+  function renderAbilities(form) {
+    return `
+      <div class="section-title">Abilities</div>
+      <div class="abilities">
+        ${form.abilities
+          .map(
+            (a) => `
+          <div class="ability-item">
+            <span class="ability-badge${a.hidden ? " hidden-ability" : ""}">${a.name.replace(/-/g, " ")}${a.hidden ? " (hidden)" : ""}</span>
+            ${a.effect ? `<span class="ability-effect">${a.effect}</span>` : ""}
+          </div>`,
+          )
+          .join("")}
+      </div>`;
+  }
+
+  // Groups a form's 18-entry attacking-type multiplier map into the three
+  // buckets worth surfacing; 1x (neutral) entries are the majority and are
+  // dropped since they carry no information.
+  function typeMatchups(effectiveness) {
+    const entries = Object.entries(effectiveness).filter(([, m]) => m !== 1);
+    return {
+      weak: entries.filter(([, m]) => m > 1).sort((a, b) => b[1] - a[1]),
+      resist: entries.filter(([, m]) => m > 0 && m < 1).sort((a, b) => a[1] - b[1]),
+      immune: entries.filter(([, m]) => m === 0),
+    };
+  }
+
+  function matchupBadge([type, mult]) {
+    return `<span class="type-badge matchup-badge" style="background:var(--type-${type})">${type} ${mult}×</span>`;
+  }
+
+  function renderTypeMatchups(form) {
+    const { weak, resist, immune } = typeMatchups(form.typeEffectiveness);
+    if (!weak.length && !resist.length && !immune.length) return "";
+    const row = (label, cls, items) =>
+      items.length
+        ? `<div class="matchup-row"><span class="matchup-label ${cls}">${label}</span><div class="matchup-badges">${items.map(matchupBadge).join("")}</div></div>`
+        : "";
+    return `
+      <div class="section-title">Type matchups</div>
+      <div class="matchup-groups">
+        ${row("Weak to", "weak", weak)}
+        ${row("Resists", "resist", resist)}
+        ${row("Immune to", "immune", immune)}
+      </div>`;
+  }
+
+  function genderRatioText(rate) {
+    if (rate === -1) return "Genderless";
+    const female = (rate / 8) * 100;
+    return `${100 - female}% ♂ / ${female}% ♀`;
+  }
+
+  function infoItem(label, value) {
+    return `<div class="info-item"><div class="label">${label}</div><div class="value">${value}</div></div>`;
+  }
+
+  function renderBreedingInfo(species, form) {
+    return `
+      <div class="section-title">Breeding &amp; training</div>
+      <div class="info-grid">
+        ${infoItem("Egg Groups", species.eggGroups.map(titleCase).join(", "))}
+        ${infoItem("Gender Ratio", genderRatioText(species.genderRate))}
+        ${infoItem("Hatch Cycles", species.hatchCounter)}
+        ${infoItem("Growth Rate", titleCase(species.growthRate))}
+        ${infoItem("Capture Rate", species.captureRate)}
+        ${infoItem("Base Happiness", species.baseHappiness)}
+        ${infoItem("Base XP", form.baseExperience ?? "—")}
+        ${infoItem("Habitat", species.habitat ? titleCase(species.habitat) : "Unknown")}
+        ${infoItem("Shape", species.shape ? titleCase(species.shape) : "Unknown")}
+      </div>`;
+  }
+
+  function renderEvolutionInfo(species) {
+    const into = evolvesIntoMap.get(species.speciesName) || [];
+    if (!species.evolvesFrom && into.length === 0) return "";
+
+    const parent = species.evolvesFrom
+      ? allPokemon.find((s) => s.speciesName === species.evolvesFrom)
+      : null;
+
+    const evoRow = (fromName, toName, methods) => `
+      <div class="evo-row">
+        <span class="evo-name">${fromName}</span>
+        <span class="evo-arrow">&rarr;</span>
+        <span class="evo-name">${toName}</span>
+        ${methods && methods.length ? `<span class="evo-method">${methods.join(" or ")}</span>` : ""}
+      </div>`;
+
+    const fromHtml = parent
+      ? evoRow(parent.speciesDisplayName, species.speciesDisplayName, species.evolutionMethods)
+      : "";
+    const intoHtml = into
+      .map((child) => evoRow(species.speciesDisplayName, child.name, child.methods))
+      .join("");
+
+    return `<div class="section-title">Evolution</div><div class="evo-info">${fromHtml}${intoHtml}</div>`;
+  }
+
+  function bindCryButton() {
+    modalContent.querySelectorAll(".cry-btn").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        new Audio(btn.dataset.cry).play().catch(() => {});
+      });
+    });
   }
 
   function renderFormTabs(species, activeSlug) {
@@ -319,6 +578,7 @@
       <div class="name">${name}</div>
       ${species.genus ? `<div class="genus">${species.genus}</div>` : ""}
       <div class="types">${form.types.map(typeBadge).join("")}</div>
+      ${form.cry ? `<button class="cry-btn" type="button" data-cry="${form.cry}">&#9654; Cry</button>` : ""}
     `;
   }
 
@@ -331,15 +591,7 @@
         <div><div class="label">Weight</div><div class="value">${weightKg} kg</div></div>
         <div><div class="label">Generation</div><div class="value">${GEN_LABELS[form.generation] || form.generation}</div></div>
       </div>
-      <div class="section-title">Abilities</div>
-      <div class="abilities">
-        ${form.abilities
-          .map(
-            (a) =>
-              `<span class="ability-badge${a.hidden ? " hidden-ability" : ""}">${a.name.replace(/-/g, " ")}${a.hidden ? " (hidden)" : ""}</span>`,
-          )
-          .join("")}
-      </div>
+      ${renderAbilities(form)}
       <div class="section-title">Base stats</div>
       ${statRow("HP", form.stats.hp)}
       ${statRow("Attack", form.stats.attack)}
@@ -347,6 +599,11 @@
       ${statRow("Sp. Atk", form.stats.specialAttack)}
       ${statRow("Sp. Def", form.stats.specialDefense)}
       ${statRow("Speed", form.stats.speed)}
+      ${totalStatRow(form.bst)}
+      ${evYieldText(form.evYield)}
+      ${renderTypeMatchups(form)}
+      ${renderBreedingInfo(species, form)}
+      ${renderEvolutionInfo(species)}
     `;
   }
 
@@ -367,6 +624,7 @@
     `;
 
     bindFormTabEvents();
+    bindCryButton();
     modalOverlay.classList.remove("hidden");
   }
 
@@ -390,6 +648,7 @@
       currentFormSlug = slug;
       header.innerHTML = renderVariantHeader(currentSpecies, form);
       body.innerHTML = renderVariantBody(currentSpecies, form);
+      bindCryButton();
       modalContent.querySelectorAll(".form-tab").forEach((btn) => {
         btn.classList.toggle("active", btn.dataset.slug === slug);
       });
@@ -500,6 +759,46 @@
     applyFilters();
   });
 
+  eggFilterBtn.addEventListener("click", () => toggleEggPanel());
+
+  eggOptions.addEventListener("click", (e) => {
+    const btn = e.target.closest(".gen-option");
+    if (!btn) return;
+    const group = btn.dataset.egg;
+    if (selectedEggGroups.has(group)) selectedEggGroups.delete(group);
+    else selectedEggGroups.add(group);
+    renderEggOptionStates();
+    updateEggFilterBtn();
+    applyFilters();
+  });
+
+  eggClearBtn.addEventListener("click", () => {
+    selectedEggGroups.clear();
+    renderEggOptionStates();
+    updateEggFilterBtn();
+    applyFilters();
+  });
+
+  habitatFilterBtn.addEventListener("click", () => toggleHabitatPanel());
+
+  habitatOptions.addEventListener("click", (e) => {
+    const btn = e.target.closest(".gen-option");
+    if (!btn) return;
+    const habitat = btn.dataset.habitat;
+    if (selectedHabitats.has(habitat)) selectedHabitats.delete(habitat);
+    else selectedHabitats.add(habitat);
+    renderHabitatOptionStates();
+    updateHabitatFilterBtn();
+    applyFilters();
+  });
+
+  habitatClearBtn.addEventListener("click", () => {
+    selectedHabitats.clear();
+    renderHabitatOptionStates();
+    updateHabitatFilterBtn();
+    applyFilters();
+  });
+
   fullyEvolvedToggle.addEventListener("click", () => {
     // Cycle: any -> only fully evolved -> hide fully evolved -> any
     fullyEvolvedFilter =
@@ -518,6 +817,12 @@
     if (!stageFilterPanel.contains(e.target) && e.target !== stageFilterBtn) {
       toggleStagePanel(false);
     }
+    if (!eggFilterPanel.contains(e.target) && e.target !== eggFilterBtn) {
+      toggleEggPanel(false);
+    }
+    if (!habitatFilterPanel.contains(e.target) && e.target !== habitatFilterBtn) {
+      toggleHabitatPanel(false);
+    }
   });
 
   clearAllBtn.addEventListener("click", () => {
@@ -527,6 +832,8 @@
     typeMode = "any";
     selectedGens.clear();
     selectedStages.clear();
+    selectedEggGroups.clear();
+    selectedHabitats.clear();
     fullyEvolvedFilter = "any";
 
     typeFilterPanel.querySelectorAll(".mode-btn").forEach((b) => {
@@ -538,10 +845,16 @@
     updateGenFilterBtn();
     renderStageOptionStates();
     updateStageFilterBtn();
+    renderEggOptionStates();
+    updateEggFilterBtn();
+    renderHabitatOptionStates();
+    updateHabitatFilterBtn();
     updateFullyEvolvedToggle();
     toggleTypePanel(false);
     toggleGenPanel(false);
     toggleStagePanel(false);
+    toggleEggPanel(false);
+    toggleHabitatPanel(false);
     applyFilters();
   });
 
@@ -549,6 +862,7 @@
     const res = await fetch("data/pokemon.json");
     allPokemon = await res.json();
     flatEntries = buildFlatEntries();
+    evolvesIntoMap = buildEvolvesIntoMap();
     populateFilterOptions();
     applyFilters();
   }
