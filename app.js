@@ -12,22 +12,57 @@
   };
   const GEN_ORDER = Object.keys(GEN_LABELS);
 
-  // In-game habitat icons from FireRed/LeafGreen's Pokédex search screen,
-  // sourced from Bulbapedia's "List of Pokémon by habitat" and bundled
-  // locally in assets/habitat-icons/ - hotlinking archives.bulbagarden.net
-  // directly returned inconsistent 403s (Cloudflare-fronted, no CORS/hotlink
-  // allowance), so these are downloaded copies rather than remote refs.
-  // https://bulbapedia.bulbagarden.net/wiki/List_of_Pok%C3%A9mon_by_habitat
+  // Habitat diorama icons matching pokedle.com's 22-category habitat
+  // taxonomy (see scripts/habitats.json), extracted from their Pokédex
+  // filter dropdown and bundled locally in assets/habitat-icons/.
   const HABITAT_ICON_URLS = {
+    areazero: "assets/habitat-icons/areazero.png",
+    beach: "assets/habitat-icons/beach.png",
     cave: "assets/habitat-icons/cave.png",
+    city: "assets/habitat-icons/city.png",
+    desertbadlands: "assets/habitat-icons/desertbadlands.png",
     forest: "assets/habitat-icons/forest.png",
+    freshwater: "assets/habitat-icons/freshwater.png",
     grassland: "assets/habitat-icons/grassland.png",
+    ice: "assets/habitat-icons/ice.png",
+    industrial: "assets/habitat-icons/industrial.png",
+    island: "assets/habitat-icons/island.png",
+    jungle: "assets/habitat-icons/jungle.png",
     mountain: "assets/habitat-icons/mountain.png",
-    rare: "assets/habitat-icons/rare.png",
-    "rough-terrain": "assets/habitat-icons/rough-terrain.png",
-    sea: "assets/habitat-icons/sea.png",
-    urban: "assets/habitat-icons/urban.png",
-    "waters-edge": "assets/habitat-icons/waters-edge.png",
+    ocean: "assets/habitat-icons/ocean.png",
+    polarsea: "assets/habitat-icons/polarsea.png",
+    ruin: "assets/habitat-icons/ruin.png",
+    sky: "assets/habitat-icons/sky.png",
+    swamp: "assets/habitat-icons/swamp.png",
+    tropicalSea: "assets/habitat-icons/tropicalsea.png",
+    ultraspace: "assets/habitat-icons/ultraspace.png",
+    unknown: "assets/habitat-icons/unknown.png",
+    volcano: "assets/habitat-icons/volcano.png",
+  };
+
+  const HABITAT_LABELS = {
+    areazero: "Area Zero",
+    beach: "Beach",
+    cave: "Cave",
+    city: "City",
+    desertbadlands: "Desert/Badlands",
+    forest: "Forest",
+    freshwater: "Freshwater",
+    grassland: "Grassland",
+    ice: "Ice",
+    industrial: "Industrial",
+    island: "Island",
+    jungle: "Jungle",
+    mountain: "Mountain",
+    ocean: "Ocean",
+    polarsea: "Polar Sea",
+    ruin: "Ruins",
+    sky: "Sky",
+    swamp: "Swamp",
+    tropicalSea: "Tropical Sea",
+    ultraspace: "Ultra Space",
+    unknown: "Unknown",
+    volcano: "Volcano",
   };
 
   const grid = document.getElementById("grid");
@@ -52,6 +87,10 @@
   const habitatFilterPanel = document.getElementById("habitat-filter-panel");
   const habitatOptions = document.getElementById("habitat-options");
   const habitatClearBtn = document.getElementById("habitat-clear-btn");
+  const colorFilterBtn = document.getElementById("color-filter-btn");
+  const colorFilterPanel = document.getElementById("color-filter-panel");
+  const colorOptions = document.getElementById("color-options");
+  const colorClearBtn = document.getElementById("color-clear-btn");
   const fullyEvolvedToggle = document.getElementById("fully-evolved-toggle");
   const clearAllBtn = document.getElementById("clear-all-btn");
   const sortSelect = document.getElementById("sort-select");
@@ -69,11 +108,15 @@
   let selectedTypes = new Set();
   let excludedTypes = new Set();
   let typeMode = "any"; // "any" (OR) or "all" (AND), applies to selectedTypes only
-  let selectedGens = new Set(); // always OR: a Pokémon belongs to exactly one generation
-  let selectedStages = new Set(); // always OR: a Pokémon belongs to exactly one evolution stage
+  let selectedGens = new Set(); // OR: matches if the Pokémon's (single) generation is selected
+  let excludedGens = new Set();
+  let selectedStages = new Set(); // OR: matches if the Pokémon's (single) evolution stage is selected
+  let excludedStages = new Set();
   let selectedEggGroups = new Set(); // OR: matches if the species has any selected group
-  let selectedHabitats = new Set(); // always OR: a species has at most one habitat
+  let selectedHabitats = new Set(); // OR: matches if the species has any selected habitat
   let excludedHabitats = new Set();
+  let selectedColors = new Set(); // OR: matches if the species has any selected color
+  let excludedColors = new Set();
   let fullyEvolvedFilter = "any"; // "any" | "only" (fully evolved) | "exclude" (hide fully evolved)
   let evolvesIntoMap = new Map(); // parent speciesName -> [{ id, name, sprite, methods }]
 
@@ -119,7 +162,8 @@
           dexNumber: species.id,
           bst: form.bst,
           eggGroups: species.eggGroups,
-          habitat: species.habitat,
+          habitats: form.habitats,
+          colors: form.colors,
         });
       }
     }
@@ -206,24 +250,108 @@
     emptyState.classList.toggle("hidden", filtered.length !== 0);
   }
 
+  // Typing a Pokémon's exact name into search resolves it to the negation of
+  // its own attributes (types, generation, fully-evolved state, habitat)
+  // instead of leaving it as a plain text query - e.g. "scolipede" excludes
+  // Bug, Poison, Gen V, fully-evolved, and Forest, surfacing Pokémon unlike it.
+  function findExactPokemonMatch(query) {
+    const q = query.toLowerCase();
+    const nameMatches = flatEntries.filter((e) => e.name.toLowerCase() === q);
+    if (nameMatches.length) return nameMatches.find((e) => e.isDefault) || nameMatches[0];
+
+    const idQuery = q.replace(/^#/, "");
+    if (idQuery && String(Number(idQuery)) === idQuery) {
+      const idMatches = flatEntries.filter((e) => String(e.dexNumber) === idQuery);
+      if (idMatches.length) return idMatches.find((e) => e.isDefault) || idMatches[0];
+    }
+    return null;
+  }
+
+  function applyPokemonSearchFilters(entry) {
+    excludedTypes = new Set(entry.types);
+    selectedTypes.clear();
+    typeMode = "any";
+    excludedGens = new Set([entry.generation]);
+    selectedGens.clear();
+    excludedStages = new Set([entry.evolutionStage]);
+    selectedStages.clear();
+    fullyEvolvedFilter = entry.fullyEvolved ? "exclude" : "only";
+    excludedHabitats = new Set(entry.habitats);
+    selectedHabitats.clear();
+    excludedColors = new Set(entry.colors);
+    selectedColors.clear();
+    searchInput.value = "";
+
+    typeFilterPanel.querySelectorAll(".mode-btn").forEach((b) => {
+      b.classList.toggle("active", b.dataset.mode === typeMode);
+    });
+    renderTypeOptionStates();
+    updateTypeFilterBtn();
+    renderGenOptionStates();
+    updateGenFilterBtn();
+    renderStageOptionStates();
+    updateStageFilterBtn();
+    updateFullyEvolvedToggle();
+    renderHabitatOptionStates();
+    updateHabitatFilterBtn();
+    renderColorOptionStates();
+    updateColorFilterBtn();
+
+    applyFilters();
+  }
+
+  function handleSearchInput() {
+    const q = searchInput.value.trim();
+    if (q) {
+      const match = findExactPokemonMatch(q);
+      if (match) {
+        applyPokemonSearchFilters(match);
+        return;
+      }
+    }
+    applyFilters();
+  }
+
   function hasActiveFilters() {
     return (
       searchInput.value.trim() !== "" ||
       selectedTypes.size > 0 ||
       excludedTypes.size > 0 ||
       selectedGens.size > 0 ||
+      excludedGens.size > 0 ||
       selectedStages.size > 0 ||
+      excludedStages.size > 0 ||
       selectedEggGroups.size > 0 ||
       selectedHabitats.size > 0 ||
       excludedHabitats.size > 0 ||
+      selectedColors.size > 0 ||
+      excludedColors.size > 0 ||
       fullyEvolvedFilter !== "any"
     );
   }
 
-  function matchesHabitat(habitat) {
-    if (excludedHabitats.size > 0 && excludedHabitats.has(habitat)) return false;
+  function matchesGen(generation) {
+    if (excludedGens.has(generation)) return false;
+    if (selectedGens.size === 0) return true;
+    return selectedGens.has(generation);
+  }
+
+  function matchesStage(stage) {
+    if (excludedStages.has(stage)) return false;
+    if (selectedStages.size === 0) return true;
+    return selectedStages.has(stage);
+  }
+
+  function matchesHabitat(habitats) {
+    if (excludedHabitats.size > 0 && habitats.some((h) => excludedHabitats.has(h))) return false;
     if (selectedHabitats.size === 0) return true;
-    return selectedHabitats.has(habitat);
+    return habitats.some((h) => selectedHabitats.has(h));
+  }
+
+  function matchesColor(colors) {
+    if (excludedColors.size > 0 && colors.some((c) => excludedColors.has(c))) return false;
+    if (selectedColors.size === 0) return true;
+    return colors.some((c) => selectedColors.has(c));
   }
 
   function matchesSelectedTypes(entryTypes) {
@@ -253,19 +381,24 @@
       selectedTypes.size > 0 ||
       excludedTypes.size > 0 ||
       selectedGens.size > 0 ||
+      excludedGens.size > 0 ||
       selectedStages.size > 0 ||
+      excludedStages.size > 0 ||
       selectedEggGroups.size > 0 ||
       selectedHabitats.size > 0 ||
       excludedHabitats.size > 0 ||
+      selectedColors.size > 0 ||
+      excludedColors.size > 0 ||
       fullyEvolvedFilter !== "any";
 
     filtered = flatEntries.filter((e) => {
       if (!active) return e.isDefault;
       if (!matchesSelectedTypes(e.types)) return false;
-      if (selectedGens.size > 0 && !selectedGens.has(e.generation)) return false;
-      if (selectedStages.size > 0 && !selectedStages.has(e.evolutionStage)) return false;
+      if (!matchesGen(e.generation)) return false;
+      if (!matchesStage(e.evolutionStage)) return false;
       if (selectedEggGroups.size > 0 && !e.eggGroups.some((g) => selectedEggGroups.has(g))) return false;
-      if (!matchesHabitat(e.habitat)) return false;
+      if (!matchesHabitat(e.habitats)) return false;
+      if (!matchesColor(e.colors)) return false;
       if (fullyEvolvedFilter === "only" && !e.fullyEvolved) return false;
       if (fullyEvolvedFilter === "exclude" && e.fullyEvolved) return false;
       if (q) {
@@ -299,12 +432,14 @@
     const stages = new Set();
     const eggGroups = new Set();
     const habitats = new Set();
+    const colors = new Set();
     flatEntries.forEach((e) => {
       e.types.forEach((t) => types.add(t));
       gens.add(e.generation);
       stages.add(e.evolutionStage);
       e.eggGroups.forEach((g) => eggGroups.add(g));
-      if (e.habitat) habitats.add(e.habitat);
+      e.habitats.forEach((h) => habitats.add(h));
+      e.colors.forEach((c) => colors.add(c));
     });
 
     typeOptions.innerHTML = [...types]
@@ -337,13 +472,21 @@
       .join("");
 
     habitatOptions.innerHTML = [...habitats]
-      .sort()
+      .sort((a, b) => (HABITAT_LABELS[a] || a).localeCompare(HABITAT_LABELS[b] || b))
       .map((h) => {
         const icon = HABITAT_ICON_URLS[h]
-          ? `<img class="habitat-icon" src="${HABITAT_ICON_URLS[h]}" alt="" loading="lazy" />`
+          ? `<img class="habitat-icon" src="${HABITAT_ICON_URLS[h]}" alt="" />`
           : "";
-        return `<button class="gen-option" data-habitat="${h}" type="button">${icon}${capitalize(h)}</button>`;
+        return `<button class="gen-option" data-habitat="${h}" type="button">${icon}${HABITAT_LABELS[h] || capitalize(h)}</button>`;
       })
+      .join("");
+
+    colorOptions.innerHTML = [...colors]
+      .sort()
+      .map(
+        (c) =>
+          `<button class="gen-option" data-color="${c}" type="button"><span class="color-swatch" style="background:var(--color-${c})"></span>${capitalize(c)}</button>`,
+      )
       .join("");
   }
 
@@ -352,7 +495,9 @@
   }
 
   function updateTypeFilterBtn() {
-    if (selectedTypes.size === 0 && excludedTypes.size === 0) {
+    const hasSelection = selectedTypes.size > 0 || excludedTypes.size > 0;
+    typeFilterBtn.classList.toggle("has-selection", hasSelection);
+    if (!hasSelection) {
       typeFilterBtn.textContent = "All types";
       return;
     }
@@ -379,17 +524,24 @@
   }
 
   function updateGenFilterBtn() {
-    if (selectedGens.size === 0) {
+    const hasSelection = selectedGens.size > 0 || excludedGens.size > 0;
+    genFilterBtn.classList.toggle("has-selection", hasSelection);
+    if (!hasSelection) {
       genFilterBtn.textContent = "All generations";
       return;
     }
-    const names = [...selectedGens].map((g) => GEN_LABELS[g] || g);
-    genFilterBtn.textContent = names.join(", ");
+    const labelFor = (g) => GEN_LABELS[g] || g;
+    let label = selectedGens.size > 0 ? [...selectedGens].map(labelFor).join(", ") : "All generations";
+    if (excludedGens.size > 0) {
+      label += ` − ${[...excludedGens].map(labelFor).join(", ")}`;
+    }
+    genFilterBtn.textContent = label;
   }
 
   function renderGenOptionStates() {
     genOptions.querySelectorAll(".gen-option").forEach((btn) => {
       btn.classList.toggle("selected", selectedGens.has(btn.dataset.gen));
+      btn.classList.toggle("excluded", excludedGens.has(btn.dataset.gen));
     });
   }
 
@@ -400,17 +552,28 @@
   }
 
   function updateStageFilterBtn() {
-    if (selectedStages.size === 0) {
+    const hasSelection = selectedStages.size > 0 || excludedStages.size > 0;
+    stageFilterBtn.classList.toggle("has-selection", hasSelection);
+    if (!hasSelection) {
       stageFilterBtn.textContent = "Any stage";
       return;
     }
-    const names = [...selectedStages].sort((a, b) => a - b).map((s) => `Stage ${s}`);
-    stageFilterBtn.textContent = names.join(", ");
+    const labelFor = (s) => `Stage ${s}`;
+    const sortNum = (a, b) => a - b;
+    let label = selectedStages.size > 0
+      ? [...selectedStages].sort(sortNum).map(labelFor).join(", ")
+      : "Any stage";
+    if (excludedStages.size > 0) {
+      label += ` − ${[...excludedStages].sort(sortNum).map(labelFor).join(", ")}`;
+    }
+    stageFilterBtn.textContent = label;
   }
 
   function renderStageOptionStates() {
     stageOptions.querySelectorAll(".gen-option").forEach((btn) => {
-      btn.classList.toggle("selected", selectedStages.has(Number(btn.dataset.stage)));
+      const stage = Number(btn.dataset.stage);
+      btn.classList.toggle("selected", selectedStages.has(stage));
+      btn.classList.toggle("excluded", excludedStages.has(stage));
     });
   }
 
@@ -421,6 +584,7 @@
   }
 
   function updateEggFilterBtn() {
+    eggFilterBtn.classList.toggle("has-selection", selectedEggGroups.size > 0);
     if (selectedEggGroups.size === 0) {
       eggFilterBtn.textContent = "Any egg group";
       return;
@@ -441,13 +605,16 @@
   }
 
   function updateHabitatFilterBtn() {
-    if (selectedHabitats.size === 0 && excludedHabitats.size === 0) {
+    const hasSelection = selectedHabitats.size > 0 || excludedHabitats.size > 0;
+    habitatFilterBtn.classList.toggle("has-selection", hasSelection);
+    if (!hasSelection) {
       habitatFilterBtn.textContent = "Any habitat";
       return;
     }
-    let label = selectedHabitats.size > 0 ? [...selectedHabitats].map(capitalize).join(", ") : "Any habitat";
+    const labelFor = (h) => HABITAT_LABELS[h] || capitalize(h);
+    let label = selectedHabitats.size > 0 ? [...selectedHabitats].map(labelFor).join(", ") : "Any habitat";
     if (excludedHabitats.size > 0) {
-      label += ` − ${[...excludedHabitats].map(capitalize).join(", ")}`;
+      label += ` − ${[...excludedHabitats].map(labelFor).join(", ")}`;
     }
     habitatFilterBtn.textContent = label;
   }
@@ -463,6 +630,33 @@
     const willShow = show ?? habitatFilterPanel.classList.contains("hidden");
     habitatFilterPanel.classList.toggle("hidden", !willShow);
     habitatFilterBtn.setAttribute("aria-expanded", String(willShow));
+  }
+
+  function updateColorFilterBtn() {
+    const hasSelection = selectedColors.size > 0 || excludedColors.size > 0;
+    colorFilterBtn.classList.toggle("has-selection", hasSelection);
+    if (!hasSelection) {
+      colorFilterBtn.textContent = "Any color";
+      return;
+    }
+    let label = selectedColors.size > 0 ? [...selectedColors].map(capitalize).join(", ") : "Any color";
+    if (excludedColors.size > 0) {
+      label += ` − ${[...excludedColors].map(capitalize).join(", ")}`;
+    }
+    colorFilterBtn.textContent = label;
+  }
+
+  function renderColorOptionStates() {
+    colorOptions.querySelectorAll(".gen-option").forEach((btn) => {
+      btn.classList.toggle("selected", selectedColors.has(btn.dataset.color));
+      btn.classList.toggle("excluded", excludedColors.has(btn.dataset.color));
+    });
+  }
+
+  function toggleColorPanel(show) {
+    const willShow = show ?? colorFilterPanel.classList.contains("hidden");
+    colorFilterPanel.classList.toggle("hidden", !willShow);
+    colorFilterBtn.setAttribute("aria-expanded", String(willShow));
   }
 
   function updateFullyEvolvedToggle() {
@@ -565,8 +759,27 @@
     return `${100 - female}% ♂ / ${female}% ♀`;
   }
 
-  function infoItem(label, value) {
-    return `<div class="info-item"><div class="label">${label}</div><div class="value">${value}</div></div>`;
+  function infoItem(label, value, fullWidth) {
+    return `<div class="info-item${fullWidth ? " info-item-full" : ""}"><div class="label">${label}</div><div class="value">${value}</div></div>`;
+  }
+
+  function habitatDisplay(habitats) {
+    if (!habitats || !habitats.length) return "Unknown";
+    return `<div class="habitat-chips">${habitats
+      .map((h) => {
+        const icon = HABITAT_ICON_URLS[h]
+          ? `<img class="habitat-icon" src="${HABITAT_ICON_URLS[h]}" alt="" />`
+          : "";
+        return `<span class="habitat-chip">${icon}${HABITAT_LABELS[h] || capitalize(h)}</span>`;
+      })
+      .join("")}</div>`;
+  }
+
+  function colorDisplay(colors) {
+    if (!colors || !colors.length) return "Unknown";
+    return `<div class="habitat-chips">${colors
+      .map((c) => `<span class="habitat-chip"><span class="color-swatch" style="background:var(--color-${c})"></span>${capitalize(c)}</span>`)
+      .join("")}</div>`;
   }
 
   function renderBreedingInfo(species, form) {
@@ -580,8 +793,9 @@
         ${infoItem("Capture Rate", species.captureRate)}
         ${infoItem("Base Happiness", species.baseHappiness)}
         ${infoItem("Base XP", form.baseExperience ?? "—")}
-        ${infoItem("Habitat", species.habitat ? titleCase(species.habitat) : "Unknown")}
         ${infoItem("Shape", species.shape ? titleCase(species.shape) : "Unknown")}
+        ${infoItem("Colors", colorDisplay(form.colors), true)}
+        ${infoItem("Habitats", habitatDisplay(form.habitats), true)}
       </div>`;
   }
 
@@ -739,7 +953,7 @@
     if (e.key === "Escape") closeModal();
   });
 
-  searchInput.addEventListener("input", debounce(applyFilters, 120));
+  searchInput.addEventListener("input", debounce(handleSearchInput, 120));
   sortSelect.addEventListener("change", applyFilters);
 
   typeFilterBtn.addEventListener("click", () => toggleTypePanel());
@@ -787,8 +1001,15 @@
     const btn = e.target.closest(".gen-option");
     if (!btn) return;
     const gen = btn.dataset.gen;
-    if (selectedGens.has(gen)) selectedGens.delete(gen);
-    else selectedGens.add(gen);
+    // Cycle: neutral -> include -> exclude -> neutral
+    if (selectedGens.has(gen)) {
+      selectedGens.delete(gen);
+      excludedGens.add(gen);
+    } else if (excludedGens.has(gen)) {
+      excludedGens.delete(gen);
+    } else {
+      selectedGens.add(gen);
+    }
     renderGenOptionStates();
     updateGenFilterBtn();
     applyFilters();
@@ -796,6 +1017,7 @@
 
   genClearBtn.addEventListener("click", () => {
     selectedGens.clear();
+    excludedGens.clear();
     renderGenOptionStates();
     updateGenFilterBtn();
     applyFilters();
@@ -807,8 +1029,15 @@
     const btn = e.target.closest(".gen-option");
     if (!btn) return;
     const stage = Number(btn.dataset.stage);
-    if (selectedStages.has(stage)) selectedStages.delete(stage);
-    else selectedStages.add(stage);
+    // Cycle: neutral -> include -> exclude -> neutral
+    if (selectedStages.has(stage)) {
+      selectedStages.delete(stage);
+      excludedStages.add(stage);
+    } else if (excludedStages.has(stage)) {
+      excludedStages.delete(stage);
+    } else {
+      selectedStages.add(stage);
+    }
     renderStageOptionStates();
     updateStageFilterBtn();
     applyFilters();
@@ -816,6 +1045,7 @@
 
   stageClearBtn.addEventListener("click", () => {
     selectedStages.clear();
+    excludedStages.clear();
     renderStageOptionStates();
     updateStageFilterBtn();
     applyFilters();
@@ -869,6 +1099,34 @@
     applyFilters();
   });
 
+  colorFilterBtn.addEventListener("click", () => toggleColorPanel());
+
+  colorOptions.addEventListener("click", (e) => {
+    const btn = e.target.closest(".gen-option");
+    if (!btn) return;
+    const color = btn.dataset.color;
+    // Cycle: neutral -> include -> exclude -> neutral
+    if (selectedColors.has(color)) {
+      selectedColors.delete(color);
+      excludedColors.add(color);
+    } else if (excludedColors.has(color)) {
+      excludedColors.delete(color);
+    } else {
+      selectedColors.add(color);
+    }
+    renderColorOptionStates();
+    updateColorFilterBtn();
+    applyFilters();
+  });
+
+  colorClearBtn.addEventListener("click", () => {
+    selectedColors.clear();
+    excludedColors.clear();
+    renderColorOptionStates();
+    updateColorFilterBtn();
+    applyFilters();
+  });
+
   fullyEvolvedToggle.addEventListener("click", () => {
     // Cycle: any -> only fully evolved -> hide fully evolved -> any
     fullyEvolvedFilter =
@@ -893,6 +1151,9 @@
     if (!habitatFilterPanel.contains(e.target) && e.target !== habitatFilterBtn) {
       toggleHabitatPanel(false);
     }
+    if (!colorFilterPanel.contains(e.target) && e.target !== colorFilterBtn) {
+      toggleColorPanel(false);
+    }
   });
 
   clearAllBtn.addEventListener("click", () => {
@@ -901,10 +1162,14 @@
     excludedTypes.clear();
     typeMode = "any";
     selectedGens.clear();
+    excludedGens.clear();
     selectedStages.clear();
+    excludedStages.clear();
     selectedEggGroups.clear();
     selectedHabitats.clear();
     excludedHabitats.clear();
+    selectedColors.clear();
+    excludedColors.clear();
     fullyEvolvedFilter = "any";
 
     typeFilterPanel.querySelectorAll(".mode-btn").forEach((b) => {
@@ -920,12 +1185,15 @@
     updateEggFilterBtn();
     renderHabitatOptionStates();
     updateHabitatFilterBtn();
+    renderColorOptionStates();
+    updateColorFilterBtn();
     updateFullyEvolvedToggle();
     toggleTypePanel(false);
     toggleGenPanel(false);
     toggleStagePanel(false);
     toggleEggPanel(false);
     toggleHabitatPanel(false);
+    toggleColorPanel(false);
     applyFilters();
   });
 

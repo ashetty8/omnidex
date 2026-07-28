@@ -58,6 +58,14 @@
           <button id="habitat-clear-btn" class="type-clear-btn" type="button">Clear habitat</button>
         </div>
       </div>
+      <div class="type-filter-wrap">
+        <button id="color-filter-btn" class="filter-btn" type="button" aria-haspopup="true" aria-expanded="false">Any color</button>
+        <div id="color-filter-panel" class="type-filter-panel hidden">
+          <div id="color-options" class="type-options gen-options"></div>
+          <p class="type-hint">Click to include, click again to exclude</p>
+          <button id="color-clear-btn" class="type-clear-btn" type="button">Clear color</button>
+        </div>
+      </div>
       <button id="fully-evolved-toggle" class="toggle-btn" type="button" aria-pressed="false">Fully evolved only</button>
       <select id="sort-select">
         <option value="id-asc">Number (low-high)</option>

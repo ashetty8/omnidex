@@ -4,6 +4,43 @@
 const BASE = "https://pokeapi.co/api/v2";
 const CONCURRENCY = 8;
 
+// PokeAPI's own species.habitat only covers the original 386 species (the
+// in-game Pokédex habitat category was dropped after Gen III and never
+// reused), leaving every Gen IV+ Pokemon with no habitat data at all. This
+// vendored snapshot - species slug -> array of habitat tags, since a species
+// can have more than one - comes from pokedle.com's API, which has its own
+// hand-curated, full-coverage habitat taxonomy (23 categories, all 1025
+// species) built well beyond what any official Pokédex field provides.
+const HABITATS = JSON.parse(
+  await (
+    await import("node:fs/promises")
+  ).readFile(new URL("./habitats.json", import.meta.url), "utf8"),
+);
+
+// PokeAPI's species.color is a single value, but pokedle.com's guess-comparison
+// API (queried per-species via their Infinite mode, since color isn't in their
+// bulk list endpoint) shows many species have two - and includes "orange",
+// which isn't one of PokeAPI's 10 official color categories at all.
+const COLORS = JSON.parse(
+  await (
+    await import("node:fs/promises")
+  ).readFile(new URL("./colors.json", import.meta.url), "utf8"),
+);
+
+// COLORS and HABITATS above are keyed by species and applied to every form
+// alike, but non-default forms often look and live nothing like their base
+// species - Galarian Darumaka is white/blue and found on ice mountains while
+// base Darumaka is red/orange and found in deserts; Mega Charizard X is
+// black/blue while base Charizard is orange. This form-slug-keyed override
+// (also from pokedle.com, using each form's own pseudo dex number - covers
+// every regional, Mega, Gigantamax, and other alt-form variant they track)
+// replaces the species-level fallback for exactly those forms.
+const FORM_OVERRIDES = JSON.parse(
+  await (
+    await import("node:fs/promises")
+  ).readFile(new URL("./form-overrides.json", import.meta.url), "utf8"),
+);
+
 async function fetchJson(url, attempt = 1) {
   const res = await fetch(url);
   if (!res.ok) {
@@ -204,6 +241,22 @@ async function buildForm(variety, species, typeChart) {
     })),
   );
 
+  // Minior's 14 forms (7 meteor-shelled, 7 core) aren't in pokedle's tracked
+  // taxonomy, but each one's whole gimmick is its color and that color is
+  // spelled right out in the slug (minior-red, minior-blue-meteor, ...), so
+  // it's cheaper and more reliable to parse it than to leave it inheriting
+  // the species-level fallback (which only ever describes the brown shell).
+  const MINIOR_COLOR = /^minior-(red|orange|yellow|green|blue|indigo|violet)(-meteor)?$/;
+  const miniorMatch = MINIOR_COLOR.exec(pokemon.name);
+
+  const override = FORM_OVERRIDES[pokemon.name];
+  const colors = override
+    ? override.colors
+    : miniorMatch
+      ? [miniorMatch[1]]
+      : COLORS[species.name] || (species.color?.name ? [species.color.name] : []);
+  const habitats = override ? override.habitats : HABITATS[species.name] || [];
+
   return {
     slug: pokemon.name,
     label,
@@ -230,6 +283,8 @@ async function buildForm(variety, species, typeChart) {
     evYield,
     baseExperience: pokemon.base_experience ?? null,
     typeEffectiveness: computeTypeEffectiveness(types, typeChart),
+    colors,
+    habitats,
     cry: pokemon.cries?.latest || pokemon.cries?.legacy || null,
     sprite:
       pokemon.sprites.other?.["official-artwork"]?.front_default ||
@@ -358,7 +413,7 @@ async function buildEntry(listItem, typeChart) {
     spriteShiny: defaultForm.spriteShiny,
     spriteDreamWorld: defaultForm.spriteDreamWorld,
     generation: species.generation.name,
-    color: species.color?.name || "",
+    colors: defaultForm.colors,
     genus: englishGenus(species),
     flavorText: englishFlavorText(species),
     legendary: species.is_legendary,
@@ -375,7 +430,7 @@ async function buildEntry(listItem, typeChart) {
     // Eighths female (0-8); -1 means genderless.
     genderRate: species.gender_rate,
     hatchCounter: species.hatch_counter,
-    habitat: species.habitat?.name || null,
+    habitats: defaultForm.habitats,
     shape: species.shape?.name || null,
     forms,
   };
