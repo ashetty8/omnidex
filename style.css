@@ -1236,15 +1236,20 @@ html.modal-open body {
   font-weight: 700;
 }
 
-.filter-section {
-  margin-bottom: 22px;
-  padding-bottom: 20px;
-  border-bottom: 1px solid var(--border);
+.filters-panel-sections {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
 }
 
-.filter-section:last-of-type {
-  border-bottom: none;
-  padding-bottom: 0;
+/* Each section is its own bordered card rather than a shared divider line,
+   so the four groups (Type & Battle, Physical & Stats, Breeding, Discovery)
+   read as distinct regions at a glance instead of one long flowing column. */
+.filter-section {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 18px;
 }
 
 .filter-section-title {
@@ -1332,4 +1337,27 @@ html.modal-open body {
 .rarity-badge:hover {
   transform: translateY(-1px);
   filter: brightness(1.08);
+}
+
+/* Kept as its own block at the very end of the file (rather than folded
+   into the earlier min-width:760px block) so it reliably wins the cascade
+   over .filters-panel's own unqualified max-width rule above - two rules
+   of equal specificity resolve by source order regardless of which one is
+   wrapped in a matching @media, so the override has to come later in the
+   file, not just be "more specific-feeling." */
+@media (min-width: 760px) {
+  .filters-panel {
+    max-width: 960px;
+  }
+
+  .filters-panel-sections {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    align-items: start;
+    gap: 16px;
+  }
+
+  .scrollable-options {
+    max-height: 320px;
+  }
 }
