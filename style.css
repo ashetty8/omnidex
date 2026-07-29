@@ -533,7 +533,9 @@ html.modal-open body {
 .modal-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.5);
+  background: rgba(0, 0, 0, 0.75);
+  backdrop-filter: blur(3px);
+  -webkit-backdrop-filter: blur(3px);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1057,14 +1059,13 @@ html.modal-open body {
 }
 
 .move-row-head {
-  display: flex;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
   align-items: center;
   gap: 8px;
-  flex-wrap: wrap;
 }
 
 .move-level {
-  flex: none;
   font-size: 0.72rem;
   font-weight: 700;
   color: var(--text-muted);
@@ -1073,16 +1074,18 @@ html.modal-open body {
 }
 
 .move-name {
-  font-weight: 600;
-  font-size: 0.85rem;
-  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: left;
 }
 
 .move-stats {
-  flex: none;
   font-size: 0.7rem;
   color: var(--text-muted);
   font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
 .move-effect {
@@ -1142,4 +1145,38 @@ html.modal-open body {
     grid-template-columns: 1fr 1fr;
     gap: 6px 10px;
   }
+}
+
+/* Any Pokemon attribute rendered as a button (data-filter-type) jumps to
+   that trait's filtered pokedex view on click - see filterByAttribute in
+   app.js. .attr-click layers onto elements that already have their own
+   look (type badges, ability badges, habitat/color/egg chips); .attr-click
+   -text is a bare style reset for plain value buttons (move names, the
+   generation value) that had no prior visual class to hook into. */
+.attr-click {
+  font: inherit;
+  cursor: pointer;
+  transition: transform 0.15s ease, filter 0.15s ease;
+}
+
+.attr-click:hover {
+  transform: translateY(-1px);
+  filter: brightness(1.12);
+}
+
+.attr-click-text {
+  display: inline;
+  font: inherit;
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0;
+  color: inherit;
+  cursor: pointer;
+  text-align: inherit;
+}
+
+.attr-click-text:hover {
+  color: var(--modal-accent, var(--accent));
+  text-decoration: underline;
 }

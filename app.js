@@ -153,6 +153,10 @@
     return `<span class="type-badge" style="background:var(--type-${type})">${type}</span>`;
   }
 
+  function clickableTypeBadge(type) {
+    return `<button type="button" class="type-badge attr-click" data-filter-type="type" data-filter-value="${type}" style="background:var(--type-${type})">${type}</button>`;
+  }
+
   // Tints the whole modal (header glow, sprite shadow, active tab, stat
   // bars, section-title accents, move-row hover) to the currently shown
   // form's primary type, so it reads as "this Pokemon's page" rather than a
@@ -854,7 +858,7 @@
           .map(
             (a) => `
           <div class="ability-item">
-            <span class="ability-badge${a.hidden ? " hidden-ability" : ""}">${a.name.replace(/-/g, " ")}${a.hidden ? " (hidden)" : ""}</span>
+            <button type="button" class="ability-badge attr-click${a.hidden ? " hidden-ability" : ""}" data-filter-type="ability" data-filter-value="${a.name}">${a.name.replace(/-/g, " ")}${a.hidden ? " (hidden)" : ""}</button>
             ${a.effect ? `<span class="ability-effect">${a.effect}</span>` : ""}
           </div>`,
           )
@@ -882,7 +886,7 @@
       <div class="move-row">
         <div class="move-row-head">
           ${m.method === "level-up" ? `<span class="move-level">${m.level > 0 ? `Lv ${m.level}` : "Evo"}</span>` : ""}
-          <span class="move-name">${titleCase(m.name)}</span>
+          <button type="button" class="move-name attr-click-text" data-filter-type="move" data-filter-value="${m.name}">${titleCase(m.name)}</button>
           ${typeBadge(m.type)}
           <span class="move-stats">${stats}</span>
         </div>
@@ -968,7 +972,7 @@
         const icon = HABITAT_ICON_URLS[h]
           ? `<img class="habitat-icon" src="${HABITAT_ICON_URLS[h]}" alt="" />`
           : "";
-        return `<span class="habitat-chip">${icon}${HABITAT_LABELS[h] || capitalize(h)}</span>`;
+        return `<button type="button" class="habitat-chip attr-click" data-filter-type="habitat" data-filter-value="${h}">${icon}${HABITAT_LABELS[h] || capitalize(h)}</button>`;
       })
       .join("")}</div>`;
   }
@@ -976,7 +980,14 @@
   function colorDisplay(colors) {
     if (!colors || !colors.length) return "Unknown";
     return `<div class="habitat-chips">${colors
-      .map((c) => `<span class="habitat-chip"><span class="color-swatch" style="background:var(--color-${c})"></span>${capitalize(c)}</span>`)
+      .map((c) => `<button type="button" class="habitat-chip attr-click" data-filter-type="color" data-filter-value="${c}"><span class="color-swatch" style="background:var(--color-${c})"></span>${capitalize(c)}</button>`)
+      .join("")}</div>`;
+  }
+
+  function eggGroupChips(eggGroups) {
+    if (!eggGroups || !eggGroups.length) return "Unknown";
+    return `<div class="habitat-chips">${eggGroups
+      .map((g) => `<button type="button" class="habitat-chip attr-click" data-filter-type="eggGroup" data-filter-value="${g}">${titleCase(g)}</button>`)
       .join("")}</div>`;
   }
 
@@ -984,7 +995,7 @@
     return `
       <div class="section-title">Breeding &amp; training</div>
       <div class="info-grid">
-        ${infoItem("Egg Groups", species.eggGroups.map(titleCase).join(", "))}
+        ${infoItem("Egg Groups", eggGroupChips(species.eggGroups))}
         ${infoItem("Gender Ratio", genderRatioText(species.genderRate))}
         ${infoItem("Hatch Cycles", species.hatchCounter)}
         ${infoItem("Growth Rate", titleCase(species.growthRate))}
@@ -1086,7 +1097,7 @@
         <div class="dex-number">${dexNumber(species.id)}</div>
         <div class="name">${name}</div>
         ${species.genus ? `<div class="genus">${species.genus}</div>` : ""}
-        <div class="types">${form.types.map(typeBadge).join("")}</div>
+        <div class="types">${form.types.map(clickableTypeBadge).join("")}</div>
         ${form.cry ? `<button class="cry-btn" type="button" data-cry="${form.cry}">&#9654; Cry</button>` : ""}
       </div>
     `;
@@ -1099,7 +1110,7 @@
       <div class="meta-row">
         <div><div class="label">Height</div><div class="value">${heightM} m</div></div>
         <div><div class="label">Weight</div><div class="value">${weightKg} kg</div></div>
-        <div><div class="label">Generation</div><div class="value">${GEN_LABELS[form.generation] || form.generation}</div></div>
+        <div><div class="label">Generation</div><button type="button" class="value attr-click-text" data-filter-type="generation" data-filter-value="${form.generation}">${GEN_LABELS[form.generation] || form.generation}</button></div>
       </div>
       ${renderAbilities(form)}
       <div class="section-title">Base stats</div>
@@ -1529,7 +1540,11 @@
     }
   });
 
-  clearAllBtn.addEventListener("click", () => {
+  // Clears every filter dimension and refreshes all filter-bar UI to match
+  // - shared by the "Clear filters" button and by filterByAttribute below,
+  // since clicking an attribute in the modal starts a fresh single-filter
+  // query rather than combining with whatever was already selected.
+  function resetAllFilterState() {
     searchInput.value = "";
     selectedTypes.clear();
     excludedTypes.clear();
@@ -1585,6 +1600,68 @@
     toggleColorPanel(false);
     toggleAbilityPanel(false);
     toggleMovePanel(false);
+  }
+
+  // Clicking a type badge, ability, habitat, color, egg group, generation,
+  // or move inside the modal jumps straight to "show me every Pokemon that
+  // shares this" - replacing whatever was filtered before rather than
+  // combining with it, since combining silently (e.g. an existing Water
+  // filter plus a clicked Fire badge) would OR them into a confusing
+  // Fire-or-Water result instead of the single-trait query the click implies.
+  function filterByAttribute(kind, value) {
+    resetAllFilterState();
+    switch (kind) {
+      case "type":
+        selectedTypes.add(value);
+        renderTypeOptionStates();
+        updateTypeFilterBtn();
+        break;
+      case "ability":
+        selectedAbilities.add(value);
+        renderAbilityOptionStates();
+        updateAbilityFilterBtn();
+        break;
+      case "habitat":
+        selectedHabitats.add(value);
+        renderHabitatOptionStates();
+        updateHabitatFilterBtn();
+        break;
+      case "color":
+        selectedColors.add(value);
+        renderColorOptionStates();
+        updateColorFilterBtn();
+        break;
+      case "eggGroup":
+        selectedEggGroups.add(value);
+        renderEggOptionStates();
+        updateEggFilterBtn();
+        break;
+      case "move":
+        selectedMoves.add(value);
+        renderMoveOptionStates();
+        updateMoveFilterBtn();
+        break;
+      case "generation":
+        selectedGens.add(value);
+        renderGenOptionStates();
+        updateGenFilterBtn();
+        break;
+      default:
+        return;
+    }
+    closeModal();
+    applyFilters();
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  modalContent.addEventListener("click", (e) => {
+    const btn = e.target.closest("[data-filter-type]");
+    if (!btn) return;
+    filterByAttribute(btn.dataset.filterType, btn.dataset.filterValue);
+  });
+
+  clearAllBtn.addEventListener("click", () => {
+    resetAllFilterState();
     applyFilters();
   });
 
