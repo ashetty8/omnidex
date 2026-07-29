@@ -1082,11 +1082,13 @@
     const name = formDisplayName(species.speciesDisplayName, form);
     return `
       <img src="${form.sprite}" alt="${name}" />
-      <div class="dex-number">${dexNumber(species.id)}</div>
-      <div class="name">${name}</div>
-      ${species.genus ? `<div class="genus">${species.genus}</div>` : ""}
-      <div class="types">${form.types.map(typeBadge).join("")}</div>
-      ${form.cry ? `<button class="cry-btn" type="button" data-cry="${form.cry}">&#9654; Cry</button>` : ""}
+      <div class="modal-header-info">
+        <div class="dex-number">${dexNumber(species.id)}</div>
+        <div class="name">${name}</div>
+        ${species.genus ? `<div class="genus">${species.genus}</div>` : ""}
+        <div class="types">${form.types.map(typeBadge).join("")}</div>
+        ${form.cry ? `<button class="cry-btn" type="button" data-cry="${form.cry}">&#9654; Cry</button>` : ""}
+      </div>
     `;
   }
 

@@ -629,6 +629,7 @@ html.modal-open body {
   margin-bottom: 14px;
 }
 
+
 #variant-header,
 #variant-body {
   transition: opacity 0.16s ease, transform 0.16s ease;
@@ -1089,4 +1090,56 @@ html.modal-open body {
   font-size: 0.76rem;
   line-height: 1.4;
   color: var(--text-muted);
+}
+
+/* Above ~760px viewport width there's room for a wider modal - reflow the
+   header into an image-left/info-right row and let list-heavy sections
+   (abilities, move pool) use two columns instead of one long scroll. Purely
+   viewport-driven so it needs no manual toggle: a real mobile screen never
+   crosses this width and keeps the original compact layout untouched.
+   Kept at the end of the file (rather than near the rules it overrides) so
+   these same-specificity selectors reliably win the cascade regardless of
+   where their unqualified counterparts are declared above. */
+@media (min-width: 760px) {
+  .modal {
+    max-width: 760px;
+  }
+
+  .modal-header {
+    display: flex;
+    align-items: center;
+    gap: 28px;
+    text-align: left;
+  }
+
+  .modal-header img {
+    width: 200px;
+    height: 200px;
+    flex: none;
+  }
+
+  .modal-header-info {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .modal-header .types {
+    justify-content: flex-start;
+  }
+
+  .abilities {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px 16px;
+  }
+
+  .info-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+
+  .move-list {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px 10px;
+  }
 }
