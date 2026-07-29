@@ -71,6 +71,7 @@
   const filtersOverlay = document.getElementById("filters-overlay");
   const filtersClose = document.getElementById("filters-close");
   const activeChips = document.getElementById("active-chips");
+  const toolbarClearBtn = document.getElementById("toolbar-clear-btn");
   const typeOptions = document.getElementById("type-options");
   const typeClearBtn = document.getElementById("type-clear-btn");
   const typeCountToggle = document.getElementById("type-count-toggle");
@@ -833,6 +834,7 @@
     const hasSelection = chips.length > 0;
     filtersBtn.classList.toggle("has-selection", hasSelection);
     filtersBtn.textContent = hasSelection ? `Filters (${chips.length})` : "Filters";
+    toolbarClearBtn.classList.toggle("hidden", !hasSelection);
   }
 
   function applyFiltersAndChips() {
@@ -1740,6 +1742,11 @@
   });
 
   clearAllBtn.addEventListener("click", () => {
+    resetAllFilterState();
+    applyFilters();
+  });
+
+  toolbarClearBtn.addEventListener("click", () => {
     resetAllFilterState();
     applyFilters();
   });

@@ -1192,12 +1192,37 @@ html.modal-open body {
   text-align: center;
 }
 
+.active-chips-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  flex: 1 0 100%;
+  margin: 2px 0 0;
+}
+
 .active-chips {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
-  flex: 1 0 100%;
-  margin: 2px 0 0;
+}
+
+.chip-clear-all {
+  font: inherit;
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: color 0.15s ease, border-color 0.15s ease;
+}
+
+.chip-clear-all:hover {
+  color: var(--text);
+  border-color: var(--text-muted);
 }
 
 .chip {
