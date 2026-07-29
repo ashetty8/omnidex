@@ -92,12 +92,23 @@
   const colorFilterPanel = document.getElementById("color-filter-panel");
   const colorOptions = document.getElementById("color-options");
   const colorClearBtn = document.getElementById("color-clear-btn");
+  const abilityFilterBtn = document.getElementById("ability-filter-btn");
+  const abilityFilterPanel = document.getElementById("ability-filter-panel");
+  const abilityOptions = document.getElementById("ability-options");
+  const abilitySearch = document.getElementById("ability-search");
+  const abilityClearBtn = document.getElementById("ability-clear-btn");
+  const moveFilterBtn = document.getElementById("move-filter-btn");
+  const moveFilterPanel = document.getElementById("move-filter-panel");
+  const moveOptions = document.getElementById("move-options");
+  const moveSearch = document.getElementById("move-search");
+  const moveClearBtn = document.getElementById("move-clear-btn");
   const fullyEvolvedToggle = document.getElementById("fully-evolved-toggle");
   const clearAllBtn = document.getElementById("clear-all-btn");
   const sortSelect = document.getElementById("sort-select");
   const resultCount = document.getElementById("result-count");
   const emptyState = document.getElementById("empty-state");
   const modalOverlay = document.getElementById("modal-overlay");
+  const modalEl = document.querySelector(".modal");
   const modalContent = document.getElementById("modal-content");
   const modalClose = document.getElementById("modal-close");
 
@@ -120,8 +131,11 @@
   let selectedColors = new Set(); // OR: matches if the species has any selected color
   let excludedColors = new Set();
   let colorMode = "any"; // "any" (OR) or "only" (exact-set match), applies to selectedColors only
+  let selectedAbilities = new Set(); // OR: matches if the form has any selected ability
+  let selectedMoves = new Set(); // OR: matches if the form learns any selected move
   let fullyEvolvedFilter = "any"; // "any" | "only" (fully evolved) | "exclude" (hide fully evolved)
   let evolvesIntoMap = new Map(); // parent speciesName -> [{ id, name, sprite, methods }]
+  let formIndex = new Map(); // form slug -> speciesId, so a URL hash can address any individual form directly
 
   function dexNumber(id) {
     return `#${String(id).padStart(3, "0")}`;
@@ -137,6 +151,14 @@
 
   function typeBadge(type) {
     return `<span class="type-badge" style="background:var(--type-${type})">${type}</span>`;
+  }
+
+  // Tints the whole modal (header glow, sprite shadow, active tab, stat
+  // bars, section-title accents, move-row hover) to the currently shown
+  // form's primary type, so it reads as "this Pokemon's page" rather than a
+  // generic panel with a fixed accent color.
+  function setModalAccent(form) {
+    modalEl.style.setProperty("--modal-accent", `var(--type-${form.types[0]})`);
   }
 
   function formDisplayName(speciesDisplayName, form) {
@@ -167,6 +189,8 @@
           eggGroups: species.eggGroups,
           habitats: form.habitats,
           colors: form.colors,
+          abilities: form.abilities.map((a) => a.name),
+          moves: [...new Set((form.moves || []).map((m) => m.name))],
         });
       }
     }
@@ -184,6 +208,14 @@
         sprite: species.sprite,
         methods: species.evolutionMethods,
       });
+    }
+    return map;
+  }
+
+  function buildFormIndex() {
+    const map = new Map();
+    for (const species of allPokemon) {
+      for (const form of species.forms) map.set(form.slug, species.id);
     }
     return map;
   }
@@ -336,6 +368,8 @@
       excludedHabitats.size > 0 ||
       selectedColors.size > 0 ||
       excludedColors.size > 0 ||
+      selectedAbilities.size > 0 ||
+      selectedMoves.size > 0 ||
       fullyEvolvedFilter !== "any"
     );
   }
@@ -398,6 +432,16 @@
     return true;
   }
 
+  function matchesAbility(abilities) {
+    if (selectedAbilities.size === 0) return true;
+    return abilities.some((a) => selectedAbilities.has(a));
+  }
+
+  function matchesMoves(moves) {
+    if (selectedMoves.size === 0) return true;
+    return moves.some((m) => selectedMoves.has(m));
+  }
+
   function applyFilters() {
     const q = searchInput.value.trim().toLowerCase();
     const active =
@@ -414,6 +458,8 @@
       excludedHabitats.size > 0 ||
       selectedColors.size > 0 ||
       excludedColors.size > 0 ||
+      selectedAbilities.size > 0 ||
+      selectedMoves.size > 0 ||
       fullyEvolvedFilter !== "any";
 
     filtered = flatEntries.filter((e) => {
@@ -425,6 +471,8 @@
       if (selectedEggGroups.size > 0 && !e.eggGroups.some((g) => selectedEggGroups.has(g))) return false;
       if (!matchesHabitat(e.habitats)) return false;
       if (!matchesColor(e.colors)) return false;
+      if (!matchesAbility(e.abilities)) return false;
+      if (!matchesMoves(e.moves)) return false;
       if (fullyEvolvedFilter === "only" && !e.fullyEvolved) return false;
       if (fullyEvolvedFilter === "exclude" && e.fullyEvolved) return false;
       if (q) {
@@ -459,6 +507,8 @@
     const eggGroups = new Set();
     const habitats = new Set();
     const colors = new Set();
+    const abilities = new Set();
+    const moves = new Set();
     flatEntries.forEach((e) => {
       e.types.forEach((t) => types.add(t));
       gens.add(e.generation);
@@ -466,6 +516,8 @@
       e.eggGroups.forEach((g) => eggGroups.add(g));
       e.habitats.forEach((h) => habitats.add(h));
       e.colors.forEach((c) => colors.add(c));
+      e.abilities.forEach((a) => abilities.add(a));
+      e.moves.forEach((m) => moves.add(m));
     });
 
     typeOptions.innerHTML = [...types]
@@ -513,6 +565,16 @@
         (c) =>
           `<button class="gen-option" data-color="${c}" type="button"><span class="color-swatch" style="background:var(--color-${c})"></span>${capitalize(c)}</button>`,
       )
+      .join("");
+
+    abilityOptions.innerHTML = [...abilities]
+      .sort()
+      .map((a) => `<button class="gen-option" data-ability="${a}" type="button">${titleCase(a)}</button>`)
+      .join("");
+
+    moveOptions.innerHTML = [...moves]
+      .sort()
+      .map((m) => `<button class="gen-option" data-move="${m}" type="button">${titleCase(m)}</button>`)
       .join("");
   }
 
@@ -696,6 +758,48 @@
     colorFilterBtn.setAttribute("aria-expanded", String(willShow));
   }
 
+  function updateAbilityFilterBtn() {
+    abilityFilterBtn.classList.toggle("has-selection", selectedAbilities.size > 0);
+    abilityFilterBtn.textContent =
+      selectedAbilities.size === 0
+        ? "Any ability"
+        : [...selectedAbilities].map(titleCase).join(", ");
+  }
+
+  function renderAbilityOptionStates() {
+    abilityOptions.querySelectorAll(".gen-option").forEach((btn) => {
+      btn.classList.toggle("selected", selectedAbilities.has(btn.dataset.ability));
+    });
+  }
+
+  function toggleAbilityPanel(show) {
+    const willShow = show ?? abilityFilterPanel.classList.contains("hidden");
+    abilityFilterPanel.classList.toggle("hidden", !willShow);
+    abilityFilterBtn.setAttribute("aria-expanded", String(willShow));
+    if (willShow) abilitySearch.focus();
+  }
+
+  function updateMoveFilterBtn() {
+    moveFilterBtn.classList.toggle("has-selection", selectedMoves.size > 0);
+    moveFilterBtn.textContent =
+      selectedMoves.size === 0
+        ? "Learns any move"
+        : [...selectedMoves].map(titleCase).join(", ");
+  }
+
+  function renderMoveOptionStates() {
+    moveOptions.querySelectorAll(".gen-option").forEach((btn) => {
+      btn.classList.toggle("selected", selectedMoves.has(btn.dataset.move));
+    });
+  }
+
+  function toggleMovePanel(show) {
+    const willShow = show ?? moveFilterPanel.classList.contains("hidden");
+    moveFilterPanel.classList.toggle("hidden", !willShow);
+    moveFilterBtn.setAttribute("aria-expanded", String(willShow));
+    if (willShow) moveSearch.focus();
+  }
+
   function updateFullyEvolvedToggle() {
     fullyEvolvedToggle.classList.toggle("active", fullyEvolvedFilter === "only");
     fullyEvolvedToggle.classList.toggle("excluded", fullyEvolvedFilter === "exclude");
@@ -756,6 +860,63 @@
           )
           .join("")}
       </div>`;
+  }
+
+  const MOVE_METHOD_LABELS = {
+    "level-up": "Level up",
+    machine: "Machine (TM/TR)",
+    egg: "Egg move",
+    tutor: "Move tutor",
+    "form-change": "Form change",
+  };
+
+  function moveMethodLabel(method) {
+    return MOVE_METHOD_LABELS[method] || titleCase(method);
+  }
+
+  function moveRow(m) {
+    const stats = m.category === "status"
+      ? "Status"
+      : `${m.power ?? "—"} pow · ${m.accuracy ?? "—"}% acc · ${m.pp} PP`;
+    return `
+      <div class="move-row">
+        <div class="move-row-head">
+          ${m.method === "level-up" ? `<span class="move-level">${m.level > 0 ? `Lv ${m.level}` : "Evo"}</span>` : ""}
+          <span class="move-name">${titleCase(m.name)}</span>
+          ${typeBadge(m.type)}
+          <span class="move-stats">${stats}</span>
+        </div>
+        ${m.effect ? `<p class="move-effect">${m.effect}</p>` : ""}
+      </div>`;
+  }
+
+  // Grouped by learn method (level-up first, in level order - moves already
+  // arrive pre-sorted this way from fetch-data.mjs) so the modal reads the
+  // same way a game's own move-pool screen does, rather than one flat
+  // alphabetical dump.
+  function renderMovePool(form) {
+    if (!form.moves || !form.moves.length) return "";
+    const groups = new Map();
+    for (const m of form.moves) {
+      if (!groups.has(m.method)) groups.set(m.method, []);
+      groups.get(m.method).push(m);
+    }
+    const order = ["level-up", "machine", "egg", "tutor", "form-change"];
+    const methods = [...groups.keys()].sort((a, b) => {
+      const ai = order.indexOf(a);
+      const bi = order.indexOf(b);
+      return (ai === -1 ? 99 : ai) - (bi === -1 ? 99 : bi);
+    });
+    const groupsHtml = methods
+      .map(
+        (method) => `
+        <div class="move-method-group">
+          <div class="move-method-label">${moveMethodLabel(method)} (${groups.get(method).length})</div>
+          <div class="move-list">${groups.get(method).map(moveRow).join("")}</div>
+        </div>`,
+      )
+      .join("");
+    return `<div class="section-title">Move pool</div>${groupsHtml}`;
   }
 
   // Groups a form's 18-entry attacking-type multiplier map into the three
@@ -862,6 +1023,40 @@
     return `<div class="section-title">Evolution</div><div class="evo-info">${fromHtml}${intoHtml}</div>`;
   }
 
+  // National-dex-number neighbors, not filtered-list neighbors - stays fixed
+  // across form tab switches since it's rendered once outside variant-header
+  // /variant-body (which only cover the currently selected form).
+  function renderDexNav(species) {
+    const prev = allPokemon.find((s) => s.id === species.id - 1);
+    const next = allPokemon.find((s) => s.id === species.id + 1);
+    if (!prev && !next) return "";
+
+    const card = (neighbor, dir) => {
+      if (!neighbor) return `<div class="dex-nav-card dex-nav-${dir} dex-nav-empty"></div>`;
+      const defaultForm = neighbor.forms.find((f) => f.isDefault) || neighbor.forms[0];
+      const sprite = `<img class="dex-nav-sprite" src="${neighbor.sprite}" alt="" />`;
+      const info = `
+        <span class="dex-nav-info">
+          <span class="dex-nav-number">${dexNumber(neighbor.id)}</span>
+          <span class="dex-nav-name">${neighbor.speciesDisplayName}</span>
+        </span>`;
+      return `
+        <button class="dex-nav-card dex-nav-${dir}" type="button" data-slug="${defaultForm.slug}">
+          ${dir === "prev" ? sprite + info : info + sprite}
+        </button>`;
+    };
+
+    return `<div class="dex-nav">${card(prev, "prev")}${card(next, "next")}</div>`;
+  }
+
+  function bindDexNavEvents() {
+    modalContent.querySelectorAll(".dex-nav-card[data-slug]").forEach((card) => {
+      card.addEventListener("click", () => {
+        location.hash = card.dataset.slug;
+      });
+    });
+  }
+
   function bindCryButton() {
     modalContent.querySelectorAll(".cry-btn").forEach((btn) => {
       btn.addEventListener("click", () => {
@@ -917,6 +1112,7 @@
       ${renderTypeMatchups(form)}
       ${renderBreedingInfo(species, form)}
       ${renderEvolutionInfo(species)}
+      ${renderMovePool(form)}
     `;
   }
 
@@ -928,18 +1124,22 @@
     const defaultForm = species.forms.find((f) => f.isDefault) || species.forms[0];
     const form = (formSlug && species.forms.find((f) => f.slug === formSlug)) || defaultForm;
     currentFormSlug = form.slug;
+    setModalAccent(form);
 
     modalContent.innerHTML = `
       <div class="modal-header" id="variant-header">${renderVariantHeader(species, form)}</div>
       ${renderFormTabs(species, currentFormSlug)}
       ${species.flavorText ? `<p class="flavor-text">${species.flavorText}</p>` : ""}
+      ${renderDexNav(species)}
       <div id="variant-body">${renderVariantBody(species, form)}</div>
     `;
 
     bindFormTabEvents();
     bindCryButton();
+    bindDexNavEvents();
     modalOverlay.classList.remove("hidden");
     document.documentElement.classList.add("modal-open");
+    document.title = `${formDisplayName(species.speciesDisplayName, form)} - Omnidex`;
   }
 
   function bindFormTabEvents() {
@@ -960,6 +1160,7 @@
 
     setTimeout(() => {
       currentFormSlug = slug;
+      setModalAccent(form);
       header.innerHTML = renderVariantHeader(currentSpecies, form);
       body.innerHTML = renderVariantBody(currentSpecies, form);
       bindCryButton();
@@ -968,20 +1169,61 @@
       });
       header.classList.remove("variant-fade-out");
       body.classList.remove("variant-fade-out");
+      document.title = `${formDisplayName(currentSpecies.speciesDisplayName, form)} - Omnidex`;
+      // Switching tabs within an already-open Pokemon replaces the hash in
+      // place rather than pushing a new history entry, so tab-hopping
+      // (Base -> Mega X -> Mega Y) doesn't require multiple presses of the
+      // back button to leave the Pokemon entirely.
+      history.replaceState(null, "", "#" + slug);
     }, 160);
   }
 
-  function closeModal() {
+  // Hides the modal without touching the URL - used when a hash change
+  // (browser back/forward, or a hash that no longer resolves) is what
+  // triggered the close, since the URL has already been updated by then.
+  function closeModalUI() {
     modalOverlay.classList.add("hidden");
     document.documentElement.classList.remove("modal-open");
     currentSpecies = null;
     currentFormSlug = null;
+    document.title = "Omnidex";
   }
+
+  // User-initiated close (X button, overlay click, Escape). Clears the hash
+  // in place via replaceState rather than history.back(), since a modal
+  // reached by a deep link (someone else's shared #slug URL) has nothing
+  // in this tab's history to go back to - back() would leave the site
+  // entirely instead of just closing the modal.
+  function closeModal() {
+    closeModalUI();
+    if (location.hash) {
+      history.replaceState(null, "", location.pathname + location.search);
+    }
+  }
+
+  // Every open/close/tab-switch funnels through the hash, and this listener
+  // is the single place that reacts to it - so a card click just sets the
+  // hash and lets this render, rather than opening the modal directly.
+  function applyHashState() {
+    const slug = decodeURIComponent(location.hash.slice(1));
+    if (!slug) {
+      if (currentSpecies) closeModalUI();
+      return;
+    }
+    const speciesId = formIndex.get(slug);
+    if (speciesId === undefined) {
+      if (currentSpecies) closeModalUI();
+      return;
+    }
+    openModal(speciesId, slug);
+  }
+
+  window.addEventListener("hashchange", applyHashState);
 
   grid.addEventListener("click", (e) => {
     const card = e.target.closest(".card");
     if (!card) return;
-    openModal(Number(card.dataset.species), card.dataset.form);
+    location.hash = card.dataset.form;
   });
 
   modalClose.addEventListener("click", closeModal);
@@ -1192,6 +1434,64 @@
     applyFilters();
   });
 
+  abilityFilterBtn.addEventListener("click", () => toggleAbilityPanel());
+
+  abilityOptions.addEventListener("click", (e) => {
+    const btn = e.target.closest(".gen-option");
+    if (!btn) return;
+    const ability = btn.dataset.ability;
+    if (selectedAbilities.has(ability)) selectedAbilities.delete(ability);
+    else selectedAbilities.add(ability);
+    renderAbilityOptionStates();
+    updateAbilityFilterBtn();
+    applyFilters();
+  });
+
+  abilitySearch.addEventListener("input", () => {
+    const q = abilitySearch.value.trim().toLowerCase();
+    abilityOptions.querySelectorAll(".gen-option").forEach((btn) => {
+      btn.classList.toggle("hidden", !btn.textContent.toLowerCase().includes(q));
+    });
+  });
+
+  abilityClearBtn.addEventListener("click", () => {
+    selectedAbilities.clear();
+    abilitySearch.value = "";
+    abilityOptions.querySelectorAll(".gen-option").forEach((btn) => btn.classList.remove("hidden"));
+    renderAbilityOptionStates();
+    updateAbilityFilterBtn();
+    applyFilters();
+  });
+
+  moveFilterBtn.addEventListener("click", () => toggleMovePanel());
+
+  moveOptions.addEventListener("click", (e) => {
+    const btn = e.target.closest(".gen-option");
+    if (!btn) return;
+    const move = btn.dataset.move;
+    if (selectedMoves.has(move)) selectedMoves.delete(move);
+    else selectedMoves.add(move);
+    renderMoveOptionStates();
+    updateMoveFilterBtn();
+    applyFilters();
+  });
+
+  moveSearch.addEventListener("input", () => {
+    const q = moveSearch.value.trim().toLowerCase();
+    moveOptions.querySelectorAll(".gen-option").forEach((btn) => {
+      btn.classList.toggle("hidden", !btn.textContent.toLowerCase().includes(q));
+    });
+  });
+
+  moveClearBtn.addEventListener("click", () => {
+    selectedMoves.clear();
+    moveSearch.value = "";
+    moveOptions.querySelectorAll(".gen-option").forEach((btn) => btn.classList.remove("hidden"));
+    renderMoveOptionStates();
+    updateMoveFilterBtn();
+    applyFilters();
+  });
+
   fullyEvolvedToggle.addEventListener("click", () => {
     // Cycle: any -> only fully evolved -> hide fully evolved -> any
     fullyEvolvedFilter =
@@ -1219,6 +1519,12 @@
     if (!colorFilterPanel.contains(e.target) && e.target !== colorFilterBtn) {
       toggleColorPanel(false);
     }
+    if (!abilityFilterPanel.contains(e.target) && e.target !== abilityFilterBtn) {
+      toggleAbilityPanel(false);
+    }
+    if (!moveFilterPanel.contains(e.target) && e.target !== moveFilterBtn) {
+      toggleMovePanel(false);
+    }
   });
 
   clearAllBtn.addEventListener("click", () => {
@@ -1237,6 +1543,12 @@
     selectedColors.clear();
     excludedColors.clear();
     colorMode = "any";
+    selectedAbilities.clear();
+    selectedMoves.clear();
+    abilitySearch.value = "";
+    moveSearch.value = "";
+    abilityOptions.querySelectorAll(".gen-option").forEach((btn) => btn.classList.remove("hidden"));
+    moveOptions.querySelectorAll(".gen-option").forEach((btn) => btn.classList.remove("hidden"));
     fullyEvolvedFilter = "any";
 
     typeFilterPanel.querySelectorAll(".mode-btn").forEach((b) => {
@@ -1258,6 +1570,10 @@
     updateHabitatFilterBtn();
     renderColorOptionStates();
     updateColorFilterBtn();
+    renderAbilityOptionStates();
+    updateAbilityFilterBtn();
+    renderMoveOptionStates();
+    updateMoveFilterBtn();
     updateFullyEvolvedToggle();
     toggleTypePanel(false);
     toggleGenPanel(false);
@@ -1265,6 +1581,8 @@
     toggleEggPanel(false);
     toggleHabitatPanel(false);
     toggleColorPanel(false);
+    toggleAbilityPanel(false);
+    toggleMovePanel(false);
     applyFilters();
   });
 
@@ -1273,8 +1591,10 @@
     allPokemon = await res.json();
     flatEntries = buildFlatEntries();
     evolvesIntoMap = buildEvolvesIntoMap();
+    formIndex = buildFormIndex();
     populateFilterOptions();
     applyFilters();
+    applyHashState();
   }
 
   init().catch((err) => {

@@ -126,6 +126,20 @@ async function loadTypeChart() {
   return chart;
 }
 
+// Pre-warms moveDetailsCache for every move in the game (~919, via the
+// bulk list endpoint) at controlled concurrency, before any per-Pokemon
+// form fetch starts. Without this, buildForm's per-form resolveCurrentMoves
+// call would fire off a burst of uncoordinated getMoveDetails calls - up to
+// CONCURRENCY species in flight at once, each awaiting Promise.all across
+// every move a Pokemon can learn (100+ for some) - which risks tripping
+// PokeAPI's rate limiting. Fetching the full set once up front, at the same
+// concurrency as everything else, means resolveCurrentMoves later only ever
+// hits a warm cache.
+async function preloadMoveDetails() {
+  const list = await fetchJson(`${BASE}/move?limit=1000`);
+  await mapLimit(list.results, CONCURRENCY, (m) => getMoveDetails(m.url));
+}
+
 function computeTypeEffectiveness(types, chart) {
   const result = {};
   for (const attackType of Object.keys(chart)) {
@@ -153,6 +167,100 @@ function getAbilityEffect(url) {
     );
   }
   return abilityEffectCache.get(url);
+}
+
+// Move type/power/accuracy/pp/effect text lives on the move resource, not
+// the per-Pokemon move list, and is shared across every Pokemon that learns
+// it (~900 moves total vs. tens of thousands of per-form learn entries), so
+// cache by URL exactly like ability effects above.
+const moveDetailsCache = new Map();
+
+function getMoveDetails(url) {
+  if (!moveDetailsCache.has(url)) {
+    moveDetailsCache.set(
+      url,
+      fetchJson(url).then((m) => {
+        const entry = m.effect_entries.find((e) => e.language.name === "en");
+        const effect = entry
+          ? entry.short_effect.replace("$effect_chance", m.effect_chance ?? "")
+          : "";
+        return {
+          type: m.type.name,
+          category: m.damage_class?.name || "status",
+          power: m.power,
+          pp: m.pp,
+          accuracy: m.accuracy,
+          priority: m.priority,
+          effect,
+        };
+      }),
+    );
+  }
+  return moveDetailsCache.get(url);
+}
+
+// Generation rank for comparing two generation slugs (higher index = newer).
+const GENERATION_ORDER = [
+  "generation-i", "generation-ii", "generation-iii", "generation-iv",
+  "generation-v", "generation-vi", "generation-vii", "generation-viii",
+  "generation-ix",
+];
+
+// PokeAPI's per-move version_group_details isn't chronologically ordered
+// (e.g. Charizard's Mega Punch entry list has Gen VIII sword-shield sandwiched
+// between two later-added Gen I Japanese-version entries), so "last in the
+// array" can't be trusted to mean "most recent." Every other field on an
+// entry here is a single "current" snapshot rather than a per-game history
+// (stats, abilities, etc. all reflect the latest data with no version
+// selector in the app), so moves follow the same rule: resolve each version
+// group to its generation (cached - only ~25 unique groups across the whole
+// run) and keep only the entries belonging to the single most recent
+// generation the move appears in, deduped by learn method.
+async function resolveCurrentMoves(movesRaw) {
+  const withGen = await Promise.all(
+    movesRaw.map(async (m) => {
+      const details = await Promise.all(
+        m.version_group_details.map(async (vgd) => ({
+          method: vgd.move_learn_method.name,
+          level: vgd.level_learned_at,
+          generation: await getGenerationForVersionGroup(vgd.version_group.url),
+        })),
+      );
+      const maxRank = Math.max(...details.map((d) => GENERATION_ORDER.indexOf(d.generation)));
+      const latest = details.filter((d) => GENERATION_ORDER.indexOf(d.generation) === maxRank);
+      const byMethod = new Map();
+      for (const d of latest) {
+        const existing = byMethod.get(d.method);
+        if (existing === undefined || (d.level > 0 && d.level < existing)) {
+          byMethod.set(d.method, d.level);
+        }
+      }
+      return { name: m.move.name, url: m.move.url, byMethod };
+    }),
+  );
+
+  const result = [];
+  for (const { name, url, byMethod } of withGen) {
+    const info = await getMoveDetails(url);
+    for (const [method, level] of byMethod) {
+      result.push({
+        name,
+        method,
+        level: method === "level-up" ? level : null,
+        ...info,
+      });
+    }
+  }
+  // Level-up moves first in level order, then everything else alphabetically
+  // by method so machine/egg/tutor moves group together in the UI.
+  result.sort((a, b) => {
+    if (a.method === "level-up" && b.method === "level-up") return a.level - b.level;
+    if (a.method === "level-up") return -1;
+    if (b.method === "level-up") return 1;
+    if (a.method !== b.method) return a.method.localeCompare(b.method);
+    return a.name.localeCompare(b.name);
+  });
+  return result;
 }
 
 // Short tab/badge labels are generated word-by-word from the variety slug
@@ -245,6 +353,8 @@ async function buildForm(variety, species, typeChart) {
     })),
   );
 
+  const moves = await resolveCurrentMoves(pokemon.moves);
+
   // Minior's 14 forms (7 meteor-shelled, 7 core) aren't in pokedle's tracked
   // taxonomy, but each one's whole gimmick is its color and that color is
   // spelled right out in the slug (minior-red, minior-blue-meteor, ...), so
@@ -287,6 +397,7 @@ async function buildForm(variety, species, typeChart) {
     evYield,
     baseExperience: pokemon.base_experience ?? null,
     typeEffectiveness: computeTypeEffectiveness(types, typeChart),
+    moves,
     colors,
     habitats,
     cry: pokemon.cries?.latest || pokemon.cries?.legacy || null,
@@ -453,6 +564,9 @@ async function buildEntry(listItem, typeChart) {
 async function main() {
   console.log("Fetching type chart...");
   const typeChart = await loadTypeChart();
+
+  console.log("Fetching move details...");
+  await preloadMoveDetails();
 
   console.log("Fetching pokemon species list...");
   const list = await fetchJson(`${BASE}/pokemon-species?limit=2000`);

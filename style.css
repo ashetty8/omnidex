@@ -243,6 +243,25 @@ body {
   text-decoration: line-through;
 }
 
+.panel-search {
+  display: block;
+  width: 100%;
+  font: inherit;
+  font-size: 0.8rem;
+  padding: 6px 10px;
+  margin-bottom: 8px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+}
+
+.scrollable-options {
+  max-height: 220px;
+  overflow-y: auto;
+  align-content: flex-start;
+}
+
 .type-hint {
   margin: 0 0 10px;
   font-size: 0.7rem;
@@ -529,9 +548,25 @@ html.modal-open body {
   max-width: 480px;
   width: 100%;
   max-height: 88vh;
+  overflow-x: hidden;
   overflow-y: auto;
-  padding: 28px 24px 24px;
+  padding: 0 24px 24px;
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.35);
+}
+
+@keyframes modalPop {
+  from {
+    opacity: 0;
+    transform: scale(0.94) translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.modal-overlay:not(.hidden) .modal {
+  animation: modalPop 0.22s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .modal-close {
@@ -553,12 +588,21 @@ html.modal-open body {
 
 .modal-header {
   text-align: center;
+  margin: 0 -24px 0;
+  padding: 32px 24px 24px;
+  border-radius: 18px 18px 0 0;
+  background: radial-gradient(
+    ellipse 140% 100% at 50% -10%,
+    color-mix(in srgb, var(--modal-accent, var(--accent)) 30%, transparent),
+    transparent 65%
+  );
 }
 
 .modal-header img {
   width: 160px;
   height: 160px;
   object-fit: contain;
+  filter: drop-shadow(0 10px 24px color-mix(in srgb, var(--modal-accent, var(--accent)) 55%, transparent));
 }
 
 .modal-header .dex-number {
@@ -633,8 +677,8 @@ html.modal-open body {
 }
 
 .form-tab.active {
-  background: var(--accent);
-  border-color: var(--accent);
+  background: var(--modal-accent, var(--accent));
+  border-color: var(--modal-accent, var(--accent));
   color: #fff;
 }
 
@@ -644,6 +688,101 @@ html.modal-open body {
   color: var(--text);
   text-align: center;
   margin-bottom: 18px;
+}
+
+.dex-nav {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 18px;
+}
+
+.dex-nav-card {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 8px 16px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  font: inherit;
+  cursor: pointer;
+  transition: border-color 0.2s ease, background 0.2s ease, transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.dex-nav-card:hover {
+  border-color: var(--modal-accent, var(--accent));
+  background: color-mix(in srgb, var(--modal-accent, var(--accent)) 10%, var(--bg));
+  transform: translateY(-2px);
+}
+
+.dex-nav-prev {
+  clip-path: polygon(14px 0, 100% 0, 100% 100%, 14px 100%, 0 50%);
+  padding-left: 22px;
+}
+
+.dex-nav-next {
+  clip-path: polygon(0 0, calc(100% - 14px) 0, 100% 50%, calc(100% - 14px) 100%, 0 100%);
+  padding-right: 22px;
+  flex-direction: row-reverse;
+}
+
+.dex-nav-empty {
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.dex-nav-sprite {
+  width: 40px;
+  height: 40px;
+  object-fit: contain;
+  flex: none;
+  filter: grayscale(70%) brightness(0.75);
+  opacity: 0.75;
+  transform: scale(0.88);
+  transition: filter 0.25s ease, opacity 0.25s ease, transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.dex-nav-card:hover .dex-nav-sprite {
+  filter: grayscale(0%) brightness(1);
+  opacity: 1;
+  transform: scale(1.15) rotate(-6deg);
+}
+
+.dex-nav-next:hover .dex-nav-sprite {
+  transform: scale(1.15) rotate(6deg);
+}
+
+.dex-nav-info {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.dex-nav-next .dex-nav-info {
+  align-items: flex-end;
+  text-align: right;
+}
+
+.dex-nav-number {
+  font-size: 0.64rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-muted);
+  transition: color 0.2s ease;
+}
+
+.dex-nav-card:hover .dex-nav-number {
+  color: var(--modal-accent, var(--accent));
+}
+
+.dex-nav-name {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
 }
 
 .meta-row {
@@ -667,10 +806,13 @@ html.modal-open body {
 
 .section-title {
   font-size: 0.75rem;
+  font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.04em;
   color: var(--text-muted);
-  margin: 16px 0 8px;
+  margin: 20px 0 10px;
+  padding-left: 9px;
+  border-left: 3px solid var(--modal-accent, var(--accent));
 }
 
 .abilities {
@@ -738,7 +880,8 @@ html.modal-open body {
 .stat-bar-fill {
   height: 100%;
   border-radius: 999px;
-  background: var(--accent);
+  background: var(--modal-accent, var(--accent));
+  transition: width 0.3s ease;
 }
 
 .stat-row.stat-total {
@@ -774,7 +917,7 @@ html.modal-open body {
 
 .cry-btn:hover {
   color: var(--text);
-  border-color: var(--text-muted);
+  border-color: var(--modal-accent, var(--accent));
 }
 
 .matchup-groups {
@@ -878,5 +1021,72 @@ html.modal-open body {
 .evo-row .evo-method {
   flex-basis: 100%;
   font-size: 0.78rem;
+  color: var(--text-muted);
+}
+
+.move-method-group {
+  margin-bottom: 12px;
+}
+
+.move-method-label {
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+  margin-bottom: 6px;
+}
+
+.move-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.move-row {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 7px 10px;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.move-row:hover {
+  border-color: color-mix(in srgb, var(--modal-accent, var(--accent)) 50%, var(--border));
+  background: color-mix(in srgb, var(--modal-accent, var(--accent)) 6%, var(--surface));
+}
+
+.move-row-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.move-level {
+  flex: none;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+  min-width: 24px;
+}
+
+.move-name {
+  font-weight: 600;
+  font-size: 0.85rem;
+  flex: 1 1 auto;
+}
+
+.move-stats {
+  flex: none;
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.move-effect {
+  margin: 4px 0 0;
+  font-size: 0.76rem;
+  line-height: 1.4;
   color: var(--text-muted);
 }

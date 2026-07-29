@@ -71,6 +71,22 @@
           <button id="color-clear-btn" class="type-clear-btn" type="button">Clear color</button>
         </div>
       </div>
+      <div class="type-filter-wrap">
+        <button id="ability-filter-btn" class="filter-btn" type="button" aria-haspopup="true" aria-expanded="false">Any ability</button>
+        <div id="ability-filter-panel" class="type-filter-panel hidden">
+          <input id="ability-search" class="panel-search" type="search" placeholder="Search abilities..." autocomplete="off" />
+          <div id="ability-options" class="type-options gen-options scrollable-options"></div>
+          <button id="ability-clear-btn" class="type-clear-btn" type="button">Clear abilities</button>
+        </div>
+      </div>
+      <div class="type-filter-wrap">
+        <button id="move-filter-btn" class="filter-btn" type="button" aria-haspopup="true" aria-expanded="false">Learns any move</button>
+        <div id="move-filter-panel" class="type-filter-panel hidden">
+          <input id="move-search" class="panel-search" type="search" placeholder="Search moves..." autocomplete="off" />
+          <div id="move-options" class="type-options gen-options scrollable-options"></div>
+          <button id="move-clear-btn" class="type-clear-btn" type="button">Clear moves</button>
+        </div>
+      </div>
       <button id="fully-evolved-toggle" class="toggle-btn" type="button" aria-pressed="false">Fully evolved only</button>
       <select id="sort-select">
         <option value="id-asc">Number (low-high)</option>
