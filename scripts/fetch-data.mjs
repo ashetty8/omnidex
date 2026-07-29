@@ -107,17 +107,21 @@ const NON_BATTLE_TYPES = new Set(["unknown", "shadow"]);
 
 async function loadTypeChart() {
   const list = await fetchJson(`${BASE}/type?limit=30`);
+  const types = list.results.filter((t) => !NON_BATTLE_TYPES.has(t.name));
+  // Keys are pre-inserted in list order before the parallel fetches start,
+  // since assigning chart[t.name] inside each async callback would order
+  // keys by network resolution instead - nondeterministic run to run, which
+  // made every entry's typeEffectiveness reserialize with shuffled keys on
+  // every regen even when no values actually changed.
   const chart = {};
+  types.forEach((t) => (chart[t.name] = {}));
   await Promise.all(
-    list.results
-      .filter((t) => !NON_BATTLE_TYPES.has(t.name))
-      .map(async (t) => {
-        const data = await fetchJson(t.url);
-        chart[t.name] = {};
-        data.damage_relations.double_damage_to.forEach((d) => (chart[t.name][d.name] = 2));
-        data.damage_relations.half_damage_to.forEach((d) => (chart[t.name][d.name] = 0.5));
-        data.damage_relations.no_damage_to.forEach((d) => (chart[t.name][d.name] = 0));
-      }),
+    types.map(async (t) => {
+      const data = await fetchJson(t.url);
+      data.damage_relations.double_damage_to.forEach((d) => (chart[t.name][d.name] = 2));
+      data.damage_relations.half_damage_to.forEach((d) => (chart[t.name][d.name] = 0.5));
+      data.damage_relations.no_damage_to.forEach((d) => (chart[t.name][d.name] = 0));
+    }),
   );
   return chart;
 }
@@ -264,7 +268,7 @@ async function buildForm(variety, species, typeChart) {
     // "10% Zygarde"), straight from PokeAPI's own English translation with
     // a template fallback if one isn't available. Unused for default forms,
     // which always display as the bare species name instead.
-    fullName: variety.is_default ? null : meta.fullName || `${label} ${species.name}`,
+    fullName: variety.is_default ? null : meta.fullName || `${label} ${englishSpeciesName(species)}`,
     isDefault: variety.is_default,
     generation: meta.generation,
     height: pokemon.height, // decimetres
@@ -379,6 +383,16 @@ async function buildEntry(listItem, typeChart) {
     species.varieties.map((v) => buildForm(v, species, typeChart)),
   );
   const defaultForm = forms.find((f) => f.isDefault) || forms[0];
+
+  // A handful of forms (Koraidon/Miraidon's battle "build"/"mode" variants)
+  // have no sprite of their own anywhere in PokeAPI - official-artwork,
+  // front_default, and home are all null, unlike Totem forms which at least
+  // alias to their base form's sprite ID. Falling back to the species'
+  // default-form sprite avoids a broken image rather than leaving "".
+  for (const form of forms) {
+    if (!form.sprite) form.sprite = defaultForm.sprite;
+    if (!form.spriteShiny) form.spriteShiny = defaultForm.spriteShiny;
+  }
 
   const chainMap = await resolveEvolutionChain(species.evolution_chain.url);
   const evoInfo = chainMap.get(species.name) || {
