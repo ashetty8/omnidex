@@ -1180,3 +1180,156 @@ html.modal-open body {
   color: var(--modal-accent, var(--accent));
   text-decoration: underline;
 }
+
+/* Single-panel filter UI: a "Filters" toolbar button + active-filter chip
+   row replace what used to be nine separate dropdown buttons crowding the
+   header. The panel itself reuses .modal/.modal-overlay (same dark-blur
+   backdrop, same pop-in animation) with its own width and section layout
+   layered on top. */
+.filters-main-btn {
+  width: auto;
+  min-width: 104px;
+  text-align: center;
+}
+
+.active-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  flex: 1 0 100%;
+  margin: 2px 0 0;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font: inherit;
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 4px 8px 4px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--accent);
+  background: color-mix(in srgb, var(--accent) 14%, var(--surface));
+  color: var(--accent);
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.chip:hover {
+  background: color-mix(in srgb, var(--accent) 26%, var(--surface));
+}
+
+.chip-x {
+  font-size: 0.95rem;
+  line-height: 1;
+}
+
+.filters-panel {
+  max-width: 640px;
+  padding: 28px 24px 24px;
+}
+
+.filters-panel-title {
+  margin: 0 0 18px;
+  font-size: 1.15rem;
+  font-weight: 700;
+}
+
+.filter-section {
+  margin-bottom: 22px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid var(--border);
+}
+
+.filter-section:last-of-type {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.filter-section-title {
+  font-size: 0.8rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text);
+  margin-bottom: 16px;
+  padding-left: 9px;
+  border-left: 3px solid var(--accent);
+}
+
+.filter-subgroup {
+  margin-bottom: 18px;
+}
+
+.filter-subgroup:last-child {
+  margin-bottom: 0;
+}
+
+.filter-subgroup-label {
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--text-muted);
+  margin-bottom: 8px;
+}
+
+.filter-subgroup-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.filter-toggle-wide {
+  width: auto;
+}
+
+.range-inputs {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.range-inputs input[type="number"] {
+  width: 90px;
+  font: inherit;
+  font-size: 0.85rem;
+  padding: 6px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+}
+
+.range-inputs span {
+  color: var(--text-muted);
+}
+
+.filters-panel-footer {
+  margin-top: 4px;
+  padding-top: 18px;
+  border-top: 1px solid var(--border);
+}
+
+.rarity-badge {
+  display: inline-block;
+  margin-top: 8px;
+  font: inherit;
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 4px 12px;
+  border-radius: 999px;
+  border: none;
+  cursor: pointer;
+  background: linear-gradient(135deg, #f6d776, #d99a2b);
+  color: #2b1d00;
+  transition: transform 0.15s ease, filter 0.15s ease;
+}
+
+.rarity-badge:hover {
+  transform: translateY(-1px);
+  filter: brightness(1.08);
+}

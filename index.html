@@ -16,9 +16,33 @@
         placeholder="Search by name or #..."
         autocomplete="off"
       />
-      <div class="type-filter-wrap">
-        <button id="type-filter-btn" class="filter-btn" type="button" aria-haspopup="true" aria-expanded="false">All types</button>
-        <div id="type-filter-panel" class="type-filter-panel hidden">
+      <button id="filters-btn" class="filter-btn filters-main-btn" type="button">Filters</button>
+      <select id="sort-select">
+        <option value="id-asc">Number (low-high)</option>
+        <option value="id-desc">Number (high-low)</option>
+        <option value="name-asc">Name (A-Z)</option>
+        <option value="name-desc">Name (Z-A)</option>
+        <option value="bst-desc">Base stat total (high-low)</option>
+        <option value="bst-asc">Base stat total (low-high)</option>
+      </select>
+    </div>
+    <div id="active-chips" class="active-chips"></div>
+    <p id="result-count" class="result-count"></p>
+  </header>
+
+  <main id="grid" class="grid"></main>
+  <p id="empty-state" class="empty-state hidden">No Pokémon match your search.</p>
+
+  <div id="filters-overlay" class="modal-overlay hidden">
+    <div class="modal filters-panel" role="dialog" aria-modal="true">
+      <button id="filters-close" class="modal-close" aria-label="Close">&times;</button>
+      <h2 class="filters-panel-title">Filters</h2>
+
+      <div class="filter-section">
+        <div class="filter-section-title">Type &amp; Battle</div>
+
+        <div class="filter-subgroup">
+          <div class="filter-subgroup-label">Type</div>
           <div class="type-mode-toggle">
             <button class="mode-btn active" data-mode="any" type="button">Any</button>
             <button class="mode-btn" data-mode="all" type="button">All</button>
@@ -29,80 +53,103 @@
           <button id="type-count-toggle" class="toggle-btn type-panel-toggle" type="button" aria-pressed="false">Any type count</button>
           <button id="type-clear-btn" class="type-clear-btn" type="button">Clear types</button>
         </div>
-      </div>
-      <div class="type-filter-wrap">
-        <button id="gen-filter-btn" class="filter-btn" type="button" aria-haspopup="true" aria-expanded="false">All generations</button>
-        <div id="gen-filter-panel" class="type-filter-panel hidden">
-          <div id="gen-options" class="type-options gen-options"></div>
-          <button id="gen-clear-btn" class="type-clear-btn" type="button">Clear generations</button>
+
+        <div class="filter-subgroup">
+          <div class="filter-subgroup-label">Ability</div>
+          <input id="ability-search" class="panel-search" type="search" placeholder="Search abilities..." autocomplete="off" />
+          <div id="ability-options" class="type-options scrollable-options"></div>
+          <button id="ability-clear-btn" class="type-clear-btn" type="button">Clear abilities</button>
+        </div>
+
+        <div class="filter-subgroup">
+          <div class="filter-subgroup-label">Learns move</div>
+          <input id="move-search" class="panel-search" type="search" placeholder="Search moves..." autocomplete="off" />
+          <div id="move-options" class="type-options scrollable-options"></div>
+          <button id="move-clear-btn" class="type-clear-btn" type="button">Clear moves</button>
         </div>
       </div>
-      <div class="type-filter-wrap">
-        <button id="stage-filter-btn" class="filter-btn" type="button" aria-haspopup="true" aria-expanded="false">Any stage</button>
-        <div id="stage-filter-panel" class="type-filter-panel hidden">
-          <div id="stage-options" class="type-options gen-options"></div>
-          <button id="stage-clear-btn" class="type-clear-btn" type="button">Clear stage</button>
-        </div>
-      </div>
-      <div class="type-filter-wrap">
-        <button id="egg-filter-btn" class="filter-btn" type="button" aria-haspopup="true" aria-expanded="false">Any egg group</button>
-        <div id="egg-filter-panel" class="type-filter-panel hidden">
-          <div id="egg-options" class="type-options gen-options"></div>
-          <button id="egg-clear-btn" class="type-clear-btn" type="button">Clear egg groups</button>
-        </div>
-      </div>
-      <div class="type-filter-wrap">
-        <button id="habitat-filter-btn" class="filter-btn" type="button" aria-haspopup="true" aria-expanded="false">Any habitat</button>
-        <div id="habitat-filter-panel" class="type-filter-panel hidden">
-          <div id="habitat-options" class="type-options gen-options"></div>
-          <p class="type-hint">Click to include, click again to exclude</p>
-          <button id="habitat-clear-btn" class="type-clear-btn" type="button">Clear habitat</button>
-        </div>
-      </div>
-      <div class="type-filter-wrap">
-        <button id="color-filter-btn" class="filter-btn" type="button" aria-haspopup="true" aria-expanded="false">Any color</button>
-        <div id="color-filter-panel" class="type-filter-panel hidden">
+
+      <div class="filter-section">
+        <div class="filter-section-title">Physical &amp; Stats</div>
+
+        <div class="filter-subgroup">
+          <div class="filter-subgroup-label">Color</div>
           <div class="type-mode-toggle">
             <button class="mode-btn active" data-color-mode="any" type="button">Any</button>
             <button class="mode-btn" data-color-mode="only" type="button">Only</button>
           </div>
-          <div id="color-options" class="type-options gen-options"></div>
+          <div id="color-options" class="type-options"></div>
           <p class="type-hint">Click to include, click again to exclude</p>
           <button id="color-clear-btn" class="type-clear-btn" type="button">Clear color</button>
         </div>
-      </div>
-      <div class="type-filter-wrap">
-        <button id="ability-filter-btn" class="filter-btn" type="button" aria-haspopup="true" aria-expanded="false">Any ability</button>
-        <div id="ability-filter-panel" class="type-filter-panel hidden">
-          <input id="ability-search" class="panel-search" type="search" placeholder="Search abilities..." autocomplete="off" />
-          <div id="ability-options" class="type-options gen-options scrollable-options"></div>
-          <button id="ability-clear-btn" class="type-clear-btn" type="button">Clear abilities</button>
-        </div>
-      </div>
-      <div class="type-filter-wrap">
-        <button id="move-filter-btn" class="filter-btn" type="button" aria-haspopup="true" aria-expanded="false">Learns any move</button>
-        <div id="move-filter-panel" class="type-filter-panel hidden">
-          <input id="move-search" class="panel-search" type="search" placeholder="Search moves..." autocomplete="off" />
-          <div id="move-options" class="type-options gen-options scrollable-options"></div>
-          <button id="move-clear-btn" class="type-clear-btn" type="button">Clear moves</button>
-        </div>
-      </div>
-      <button id="fully-evolved-toggle" class="toggle-btn" type="button" aria-pressed="false">Fully evolved only</button>
-      <select id="sort-select">
-        <option value="id-asc">Number (low-high)</option>
-        <option value="id-desc">Number (high-low)</option>
-        <option value="name-asc">Name (A-Z)</option>
-        <option value="name-desc">Name (Z-A)</option>
-        <option value="bst-desc">Base stat total (high-low)</option>
-        <option value="bst-asc">Base stat total (low-high)</option>
-      </select>
-      <button id="clear-all-btn" class="clear-all-btn" type="button">Clear filters</button>
-    </div>
-    <p id="result-count" class="result-count"></p>
-  </header>
 
-  <main id="grid" class="grid"></main>
-  <p id="empty-state" class="empty-state hidden">No Pokémon match your search.</p>
+        <div class="filter-subgroup">
+          <div class="filter-subgroup-label">Shape</div>
+          <div id="shape-options" class="type-options"></div>
+          <button id="shape-clear-btn" class="type-clear-btn" type="button">Clear shape</button>
+        </div>
+
+        <div class="filter-subgroup">
+          <div class="filter-subgroup-label">Base stat total</div>
+          <div class="range-inputs">
+            <input id="bst-min" type="number" min="0" max="800" placeholder="Min" />
+            <span>–</span>
+            <input id="bst-max" type="number" min="0" max="800" placeholder="Max" />
+          </div>
+        </div>
+      </div>
+
+      <div class="filter-section">
+        <div class="filter-section-title">Breeding</div>
+
+        <div class="filter-subgroup">
+          <div class="filter-subgroup-label">Egg group</div>
+          <div id="egg-options" class="type-options"></div>
+          <button id="egg-clear-btn" class="type-clear-btn" type="button">Clear egg groups</button>
+        </div>
+
+        <div class="filter-subgroup">
+          <div class="filter-subgroup-label">Growth rate</div>
+          <div id="growth-options" class="type-options"></div>
+          <button id="growth-clear-btn" class="type-clear-btn" type="button">Clear growth rates</button>
+        </div>
+
+        <button id="genderless-toggle" class="toggle-btn filter-toggle-wide" type="button" aria-pressed="false">Any gender</button>
+      </div>
+
+      <div class="filter-section">
+        <div class="filter-section-title">Discovery</div>
+
+        <div class="filter-subgroup">
+          <div class="filter-subgroup-label">Generation</div>
+          <div id="gen-options" class="type-options"></div>
+          <button id="gen-clear-btn" class="type-clear-btn" type="button">Clear generations</button>
+        </div>
+
+        <div class="filter-subgroup">
+          <div class="filter-subgroup-label">Evolution stage</div>
+          <div id="stage-options" class="type-options"></div>
+          <button id="stage-clear-btn" class="type-clear-btn" type="button">Clear stage</button>
+        </div>
+
+        <div class="filter-subgroup">
+          <div class="filter-subgroup-label">Habitat</div>
+          <div id="habitat-options" class="type-options"></div>
+          <p class="type-hint">Click to include, click again to exclude</p>
+          <button id="habitat-clear-btn" class="type-clear-btn" type="button">Clear habitat</button>
+        </div>
+
+        <div class="filter-subgroup-row">
+          <button id="fully-evolved-toggle" class="toggle-btn filter-toggle-wide" type="button" aria-pressed="false">Fully evolved only</button>
+          <button id="legendary-toggle" class="toggle-btn filter-toggle-wide" type="button" aria-pressed="false">Any rarity</button>
+        </div>
+      </div>
+
+      <div class="filters-panel-footer">
+        <button id="clear-all-btn" class="type-clear-btn" type="button">Clear all filters</button>
+      </div>
+    </div>
+  </div>
 
   <div id="modal-overlay" class="modal-overlay hidden">
     <div class="modal" role="dialog" aria-modal="true">

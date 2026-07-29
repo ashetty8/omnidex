@@ -67,42 +67,38 @@
 
   const grid = document.getElementById("grid");
   const searchInput = document.getElementById("search");
-  const typeFilterBtn = document.getElementById("type-filter-btn");
-  const typeFilterPanel = document.getElementById("type-filter-panel");
+  const filtersBtn = document.getElementById("filters-btn");
+  const filtersOverlay = document.getElementById("filters-overlay");
+  const filtersClose = document.getElementById("filters-close");
+  const activeChips = document.getElementById("active-chips");
   const typeOptions = document.getElementById("type-options");
   const typeClearBtn = document.getElementById("type-clear-btn");
   const typeCountToggle = document.getElementById("type-count-toggle");
-  const genFilterBtn = document.getElementById("gen-filter-btn");
-  const genFilterPanel = document.getElementById("gen-filter-panel");
   const genOptions = document.getElementById("gen-options");
   const genClearBtn = document.getElementById("gen-clear-btn");
-  const stageFilterBtn = document.getElementById("stage-filter-btn");
-  const stageFilterPanel = document.getElementById("stage-filter-panel");
   const stageOptions = document.getElementById("stage-options");
   const stageClearBtn = document.getElementById("stage-clear-btn");
-  const eggFilterBtn = document.getElementById("egg-filter-btn");
-  const eggFilterPanel = document.getElementById("egg-filter-panel");
   const eggOptions = document.getElementById("egg-options");
   const eggClearBtn = document.getElementById("egg-clear-btn");
-  const habitatFilterBtn = document.getElementById("habitat-filter-btn");
-  const habitatFilterPanel = document.getElementById("habitat-filter-panel");
   const habitatOptions = document.getElementById("habitat-options");
   const habitatClearBtn = document.getElementById("habitat-clear-btn");
-  const colorFilterBtn = document.getElementById("color-filter-btn");
-  const colorFilterPanel = document.getElementById("color-filter-panel");
   const colorOptions = document.getElementById("color-options");
   const colorClearBtn = document.getElementById("color-clear-btn");
-  const abilityFilterBtn = document.getElementById("ability-filter-btn");
-  const abilityFilterPanel = document.getElementById("ability-filter-panel");
   const abilityOptions = document.getElementById("ability-options");
   const abilitySearch = document.getElementById("ability-search");
   const abilityClearBtn = document.getElementById("ability-clear-btn");
-  const moveFilterBtn = document.getElementById("move-filter-btn");
-  const moveFilterPanel = document.getElementById("move-filter-panel");
   const moveOptions = document.getElementById("move-options");
   const moveSearch = document.getElementById("move-search");
   const moveClearBtn = document.getElementById("move-clear-btn");
+  const shapeOptions = document.getElementById("shape-options");
+  const shapeClearBtn = document.getElementById("shape-clear-btn");
+  const growthOptions = document.getElementById("growth-options");
+  const growthClearBtn = document.getElementById("growth-clear-btn");
+  const bstMinInput = document.getElementById("bst-min");
+  const bstMaxInput = document.getElementById("bst-max");
+  const genderlessToggle = document.getElementById("genderless-toggle");
   const fullyEvolvedToggle = document.getElementById("fully-evolved-toggle");
+  const legendaryToggle = document.getElementById("legendary-toggle");
   const clearAllBtn = document.getElementById("clear-all-btn");
   const sortSelect = document.getElementById("sort-select");
   const resultCount = document.getElementById("result-count");
@@ -133,7 +129,13 @@
   let colorMode = "any"; // "any" (OR) or "only" (exact-set match), applies to selectedColors only
   let selectedAbilities = new Set(); // OR: matches if the form has any selected ability
   let selectedMoves = new Set(); // OR: matches if the form learns any selected move
+  let selectedShapes = new Set(); // OR: matches if the species has this body shape
+  let selectedGrowthRates = new Set(); // OR: matches if the species has this growth rate
+  let bstMin = null; // number | null
+  let bstMax = null; // number | null
+  let genderlessFilter = "any"; // "any" | "only" (genderless) | "exclude" (hide genderless)
   let fullyEvolvedFilter = "any"; // "any" | "only" (fully evolved) | "exclude" (hide fully evolved)
+  let legendaryFilter = "any"; // "any" | "only" (legendary or mythical) | "exclude"
   let evolvesIntoMap = new Map(); // parent speciesName -> [{ id, name, sprite, methods }]
   let formIndex = new Map(); // form slug -> speciesId, so a URL hash can address any individual form directly
 
@@ -195,6 +197,11 @@
           colors: form.colors,
           abilities: form.abilities.map((a) => a.name),
           moves: [...new Set((form.moves || []).map((m) => m.name))],
+          shape: species.shape,
+          growthRate: species.growthRate,
+          legendary: species.legendary,
+          mythical: species.mythical,
+          genderRate: species.genderRate,
         });
       }
     }
@@ -323,24 +330,20 @@
     colorMode = "any";
     searchInput.value = "";
 
-    typeFilterPanel.querySelectorAll(".mode-btn").forEach((b) => {
+    document.querySelectorAll(".mode-btn[data-mode]").forEach((b) => {
       b.classList.toggle("active", b.dataset.mode === typeMode);
     });
-    colorFilterPanel.querySelectorAll(".mode-btn").forEach((b) => {
+    document.querySelectorAll(".mode-btn[data-color-mode]").forEach((b) => {
       b.classList.toggle("active", b.dataset.colorMode === colorMode);
     });
     renderTypeOptionStates();
-    updateTypeFilterBtn();
     updateTypeCountToggle();
     renderGenOptionStates();
-    updateGenFilterBtn();
     renderStageOptionStates();
-    updateStageFilterBtn();
     updateFullyEvolvedToggle();
     renderHabitatOptionStates();
-    updateHabitatFilterBtn();
     renderColorOptionStates();
-    updateColorFilterBtn();
+    renderActiveChips();
 
     applyFilters();
   }
@@ -374,7 +377,13 @@
       excludedColors.size > 0 ||
       selectedAbilities.size > 0 ||
       selectedMoves.size > 0 ||
-      fullyEvolvedFilter !== "any"
+      selectedShapes.size > 0 ||
+      selectedGrowthRates.size > 0 ||
+      bstMin !== null ||
+      bstMax !== null ||
+      genderlessFilter !== "any" ||
+      fullyEvolvedFilter !== "any" ||
+      legendaryFilter !== "any"
     );
   }
 
@@ -446,25 +455,38 @@
     return moves.some((m) => selectedMoves.has(m));
   }
 
+  function matchesShape(shape) {
+    if (selectedShapes.size === 0) return true;
+    return !!shape && selectedShapes.has(shape);
+  }
+
+  function matchesGrowthRate(growthRate) {
+    if (selectedGrowthRates.size === 0) return true;
+    return !!growthRate && selectedGrowthRates.has(growthRate);
+  }
+
+  function matchesBst(bst) {
+    if (bstMin !== null && bst < bstMin) return false;
+    if (bstMax !== null && bst > bstMax) return false;
+    return true;
+  }
+
+  function matchesGenderless(genderRate) {
+    if (genderlessFilter === "only") return genderRate === -1;
+    if (genderlessFilter === "exclude") return genderRate !== -1;
+    return true;
+  }
+
+  function matchesLegendary(legendary, mythical) {
+    const isSpecial = legendary || mythical;
+    if (legendaryFilter === "only") return isSpecial;
+    if (legendaryFilter === "exclude") return !isSpecial;
+    return true;
+  }
+
   function applyFilters() {
     const q = searchInput.value.trim().toLowerCase();
-    const active =
-      q !== "" ||
-      selectedTypes.size > 0 ||
-      excludedTypes.size > 0 ||
-      typeCountFilter !== "any" ||
-      selectedGens.size > 0 ||
-      excludedGens.size > 0 ||
-      selectedStages.size > 0 ||
-      excludedStages.size > 0 ||
-      selectedEggGroups.size > 0 ||
-      selectedHabitats.size > 0 ||
-      excludedHabitats.size > 0 ||
-      selectedColors.size > 0 ||
-      excludedColors.size > 0 ||
-      selectedAbilities.size > 0 ||
-      selectedMoves.size > 0 ||
-      fullyEvolvedFilter !== "any";
+    const active = hasActiveFilters();
 
     filtered = flatEntries.filter((e) => {
       if (!active) return e.isDefault;
@@ -477,6 +499,11 @@
       if (!matchesColor(e.colors)) return false;
       if (!matchesAbility(e.abilities)) return false;
       if (!matchesMoves(e.moves)) return false;
+      if (!matchesShape(e.shape)) return false;
+      if (!matchesGrowthRate(e.growthRate)) return false;
+      if (!matchesBst(e.bst)) return false;
+      if (!matchesGenderless(e.genderRate)) return false;
+      if (!matchesLegendary(e.legendary, e.mythical)) return false;
       if (fullyEvolvedFilter === "only" && !e.fullyEvolved) return false;
       if (fullyEvolvedFilter === "exclude" && e.fullyEvolved) return false;
       if (q) {
@@ -513,6 +540,8 @@
     const colors = new Set();
     const abilities = new Set();
     const moves = new Set();
+    const shapes = new Set();
+    const growthRates = new Set();
     flatEntries.forEach((e) => {
       e.types.forEach((t) => types.add(t));
       gens.add(e.generation);
@@ -522,6 +551,8 @@
       e.colors.forEach((c) => colors.add(c));
       e.abilities.forEach((a) => abilities.add(a));
       e.moves.forEach((m) => moves.add(m));
+      if (e.shape) shapes.add(e.shape);
+      if (e.growthRate) growthRates.add(e.growthRate);
     });
 
     typeOptions.innerHTML = [...types]
@@ -580,35 +611,20 @@
       .sort()
       .map((m) => `<button class="gen-option" data-move="${m}" type="button">${titleCase(m)}</button>`)
       .join("");
+
+    shapeOptions.innerHTML = [...shapes]
+      .sort()
+      .map((s) => `<button class="gen-option" data-shape="${s}" type="button">${titleCase(s)}</button>`)
+      .join("");
+
+    growthOptions.innerHTML = [...growthRates]
+      .sort()
+      .map((g) => `<button class="gen-option" data-growth="${g}" type="button">${titleCase(g)}</button>`)
+      .join("");
   }
 
   function capitalize(t) {
     return t[0].toUpperCase() + t.slice(1);
-  }
-
-  function updateTypeFilterBtn() {
-    const hasSelection = selectedTypes.size > 0 || excludedTypes.size > 0 || typeCountFilter !== "any";
-    typeFilterBtn.classList.toggle("has-selection", hasSelection);
-    if (!hasSelection) {
-      typeFilterBtn.textContent = "All types";
-      return;
-    }
-    const joiner = typeMode === "all" || typeMode === "mono" ? " + " : ", ";
-    let label = selectedTypes.size > 0 ? [...selectedTypes].map(capitalize).join(joiner) : "All types";
-    if (excludedTypes.size > 0) {
-      label += ` − ${[...excludedTypes].map(capitalize).join(", ")}`;
-    }
-    if (typeCountFilter === "single") label += " (Monotype)";
-    if (typeCountFilter === "multi") label += " (Dual-type)";
-    typeFilterBtn.textContent = label;
-  }
-
-  function updateTypeCountToggle() {
-    typeCountToggle.classList.toggle("active", typeCountFilter === "single");
-    typeCountToggle.classList.toggle("excluded", typeCountFilter === "multi");
-    typeCountToggle.setAttribute("aria-pressed", String(typeCountFilter !== "any"));
-    typeCountToggle.textContent =
-      typeCountFilter === "single" ? "Monotype only" : typeCountFilter === "multi" ? "Dual-type only" : "Any type count";
   }
 
   function renderTypeOptionStates() {
@@ -619,25 +635,12 @@
     });
   }
 
-  function toggleTypePanel(show) {
-    const willShow = show ?? typeFilterPanel.classList.contains("hidden");
-    typeFilterPanel.classList.toggle("hidden", !willShow);
-    typeFilterBtn.setAttribute("aria-expanded", String(willShow));
-  }
-
-  function updateGenFilterBtn() {
-    const hasSelection = selectedGens.size > 0 || excludedGens.size > 0;
-    genFilterBtn.classList.toggle("has-selection", hasSelection);
-    if (!hasSelection) {
-      genFilterBtn.textContent = "All generations";
-      return;
-    }
-    const labelFor = (g) => GEN_LABELS[g] || g;
-    let label = selectedGens.size > 0 ? [...selectedGens].map(labelFor).join(", ") : "All generations";
-    if (excludedGens.size > 0) {
-      label += ` − ${[...excludedGens].map(labelFor).join(", ")}`;
-    }
-    genFilterBtn.textContent = label;
+  function updateTypeCountToggle() {
+    typeCountToggle.classList.toggle("active", typeCountFilter === "single");
+    typeCountToggle.classList.toggle("excluded", typeCountFilter === "multi");
+    typeCountToggle.setAttribute("aria-pressed", String(typeCountFilter !== "any"));
+    typeCountToggle.textContent =
+      typeCountFilter === "single" ? "Monotype only" : typeCountFilter === "multi" ? "Dual-type only" : "Any type count";
   }
 
   function renderGenOptionStates() {
@@ -645,30 +648,6 @@
       btn.classList.toggle("selected", selectedGens.has(btn.dataset.gen));
       btn.classList.toggle("excluded", excludedGens.has(btn.dataset.gen));
     });
-  }
-
-  function toggleGenPanel(show) {
-    const willShow = show ?? genFilterPanel.classList.contains("hidden");
-    genFilterPanel.classList.toggle("hidden", !willShow);
-    genFilterBtn.setAttribute("aria-expanded", String(willShow));
-  }
-
-  function updateStageFilterBtn() {
-    const hasSelection = selectedStages.size > 0 || excludedStages.size > 0;
-    stageFilterBtn.classList.toggle("has-selection", hasSelection);
-    if (!hasSelection) {
-      stageFilterBtn.textContent = "Any stage";
-      return;
-    }
-    const labelFor = (s) => `Stage ${s}`;
-    const sortNum = (a, b) => a - b;
-    let label = selectedStages.size > 0
-      ? [...selectedStages].sort(sortNum).map(labelFor).join(", ")
-      : "Any stage";
-    if (excludedStages.size > 0) {
-      label += ` − ${[...excludedStages].sort(sortNum).map(labelFor).join(", ")}`;
-    }
-    stageFilterBtn.textContent = label;
   }
 
   function renderStageOptionStates() {
@@ -679,46 +658,10 @@
     });
   }
 
-  function toggleStagePanel(show) {
-    const willShow = show ?? stageFilterPanel.classList.contains("hidden");
-    stageFilterPanel.classList.toggle("hidden", !willShow);
-    stageFilterBtn.setAttribute("aria-expanded", String(willShow));
-  }
-
-  function updateEggFilterBtn() {
-    eggFilterBtn.classList.toggle("has-selection", selectedEggGroups.size > 0);
-    if (selectedEggGroups.size === 0) {
-      eggFilterBtn.textContent = "Any egg group";
-      return;
-    }
-    eggFilterBtn.textContent = [...selectedEggGroups].map(capitalize).join(", ");
-  }
-
   function renderEggOptionStates() {
     eggOptions.querySelectorAll(".gen-option").forEach((btn) => {
       btn.classList.toggle("selected", selectedEggGroups.has(btn.dataset.egg));
     });
-  }
-
-  function toggleEggPanel(show) {
-    const willShow = show ?? eggFilterPanel.classList.contains("hidden");
-    eggFilterPanel.classList.toggle("hidden", !willShow);
-    eggFilterBtn.setAttribute("aria-expanded", String(willShow));
-  }
-
-  function updateHabitatFilterBtn() {
-    const hasSelection = selectedHabitats.size > 0 || excludedHabitats.size > 0;
-    habitatFilterBtn.classList.toggle("has-selection", hasSelection);
-    if (!hasSelection) {
-      habitatFilterBtn.textContent = "Any habitat";
-      return;
-    }
-    const labelFor = (h) => HABITAT_LABELS[h] || capitalize(h);
-    let label = selectedHabitats.size > 0 ? [...selectedHabitats].map(labelFor).join(", ") : "Any habitat";
-    if (excludedHabitats.size > 0) {
-      label += ` − ${[...excludedHabitats].map(labelFor).join(", ")}`;
-    }
-    habitatFilterBtn.textContent = label;
   }
 
   function renderHabitatOptionStates() {
@@ -728,46 +671,11 @@
     });
   }
 
-  function toggleHabitatPanel(show) {
-    const willShow = show ?? habitatFilterPanel.classList.contains("hidden");
-    habitatFilterPanel.classList.toggle("hidden", !willShow);
-    habitatFilterBtn.setAttribute("aria-expanded", String(willShow));
-  }
-
-  function updateColorFilterBtn() {
-    const hasSelection = selectedColors.size > 0 || excludedColors.size > 0;
-    colorFilterBtn.classList.toggle("has-selection", hasSelection);
-    if (!hasSelection) {
-      colorFilterBtn.textContent = "Any color";
-      return;
-    }
-    const joiner = colorMode === "only" ? " + " : ", ";
-    let label = selectedColors.size > 0 ? [...selectedColors].map(capitalize).join(joiner) : "Any color";
-    if (excludedColors.size > 0) {
-      label += ` − ${[...excludedColors].map(capitalize).join(", ")}`;
-    }
-    colorFilterBtn.textContent = label;
-  }
-
   function renderColorOptionStates() {
     colorOptions.querySelectorAll(".gen-option").forEach((btn) => {
       btn.classList.toggle("selected", selectedColors.has(btn.dataset.color));
       btn.classList.toggle("excluded", excludedColors.has(btn.dataset.color));
     });
-  }
-
-  function toggleColorPanel(show) {
-    const willShow = show ?? colorFilterPanel.classList.contains("hidden");
-    colorFilterPanel.classList.toggle("hidden", !willShow);
-    colorFilterBtn.setAttribute("aria-expanded", String(willShow));
-  }
-
-  function updateAbilityFilterBtn() {
-    abilityFilterBtn.classList.toggle("has-selection", selectedAbilities.size > 0);
-    abilityFilterBtn.textContent =
-      selectedAbilities.size === 0
-        ? "Any ability"
-        : [...selectedAbilities].map(titleCase).join(", ");
   }
 
   function renderAbilityOptionStates() {
@@ -776,32 +684,22 @@
     });
   }
 
-  function toggleAbilityPanel(show) {
-    const willShow = show ?? abilityFilterPanel.classList.contains("hidden");
-    abilityFilterPanel.classList.toggle("hidden", !willShow);
-    abilityFilterBtn.setAttribute("aria-expanded", String(willShow));
-    if (willShow) abilitySearch.focus();
-  }
-
-  function updateMoveFilterBtn() {
-    moveFilterBtn.classList.toggle("has-selection", selectedMoves.size > 0);
-    moveFilterBtn.textContent =
-      selectedMoves.size === 0
-        ? "Learns any move"
-        : [...selectedMoves].map(titleCase).join(", ");
-  }
-
   function renderMoveOptionStates() {
     moveOptions.querySelectorAll(".gen-option").forEach((btn) => {
       btn.classList.toggle("selected", selectedMoves.has(btn.dataset.move));
     });
   }
 
-  function toggleMovePanel(show) {
-    const willShow = show ?? moveFilterPanel.classList.contains("hidden");
-    moveFilterPanel.classList.toggle("hidden", !willShow);
-    moveFilterBtn.setAttribute("aria-expanded", String(willShow));
-    if (willShow) moveSearch.focus();
+  function renderShapeOptionStates() {
+    shapeOptions.querySelectorAll(".gen-option").forEach((btn) => {
+      btn.classList.toggle("selected", selectedShapes.has(btn.dataset.shape));
+    });
+  }
+
+  function renderGrowthOptionStates() {
+    growthOptions.querySelectorAll(".gen-option").forEach((btn) => {
+      btn.classList.toggle("selected", selectedGrowthRates.has(btn.dataset.growth));
+    });
   }
 
   function updateFullyEvolvedToggle() {
@@ -810,6 +708,151 @@
     fullyEvolvedToggle.setAttribute("aria-pressed", String(fullyEvolvedFilter !== "any"));
     fullyEvolvedToggle.textContent =
       fullyEvolvedFilter === "exclude" ? "Hide fully evolved" : "Fully evolved only";
+  }
+
+  function updateGenderlessToggle() {
+    genderlessToggle.classList.toggle("active", genderlessFilter === "only");
+    genderlessToggle.classList.toggle("excluded", genderlessFilter === "exclude");
+    genderlessToggle.setAttribute("aria-pressed", String(genderlessFilter !== "any"));
+    genderlessToggle.textContent =
+      genderlessFilter === "only" ? "Genderless only" : genderlessFilter === "exclude" ? "Exclude genderless" : "Any gender";
+  }
+
+  function updateLegendaryToggle() {
+    legendaryToggle.classList.toggle("active", legendaryFilter === "only");
+    legendaryToggle.classList.toggle("excluded", legendaryFilter === "exclude");
+    legendaryToggle.setAttribute("aria-pressed", String(legendaryFilter !== "any"));
+    legendaryToggle.textContent =
+      legendaryFilter === "only" ? "Legendary/Mythical only" : legendaryFilter === "exclude" ? "Hide Legendary/Mythical" : "Any rarity";
+  }
+
+  // Builds the removable-chip list shown under the toolbar from every active
+  // filter dimension at once. Each chip owns its own undo: clicking it clears
+  // just that one value, re-renders that category's option highlighting, and
+  // re-applies - so chips double as the "what's currently filtered" summary
+  // and the fastest way to walk a filter back without reopening the panel.
+  function collectChips() {
+    const chips = [];
+
+    const addSetChips = (set, render, labelFn, excluded) => {
+      set.forEach((v) => {
+        chips.push({
+          label: (excluded ? "Not " : "") + labelFn(v),
+          onRemove: () => {
+            set.delete(v);
+            render();
+            applyFiltersAndChips();
+          },
+        });
+      });
+    };
+
+    addSetChips(selectedTypes, renderTypeOptionStates, capitalize);
+    addSetChips(excludedTypes, renderTypeOptionStates, capitalize, true);
+    if (typeCountFilter !== "any") {
+      chips.push({
+        label: typeCountFilter === "single" ? "Monotype only" : "Dual-type only",
+        onRemove: () => {
+          typeCountFilter = "any";
+          updateTypeCountToggle();
+          applyFiltersAndChips();
+        },
+      });
+    }
+    addSetChips(selectedGens, renderGenOptionStates, (g) => GEN_LABELS[g] || g);
+    addSetChips(excludedGens, renderGenOptionStates, (g) => GEN_LABELS[g] || g, true);
+    addSetChips(selectedStages, renderStageOptionStates, (s) => `Stage ${s}`);
+    addSetChips(excludedStages, renderStageOptionStates, (s) => `Stage ${s}`, true);
+    addSetChips(selectedEggGroups, renderEggOptionStates, capitalize);
+    addSetChips(selectedHabitats, renderHabitatOptionStates, (h) => HABITAT_LABELS[h] || capitalize(h));
+    addSetChips(excludedHabitats, renderHabitatOptionStates, (h) => HABITAT_LABELS[h] || capitalize(h), true);
+    addSetChips(selectedColors, renderColorOptionStates, capitalize);
+    addSetChips(excludedColors, renderColorOptionStates, capitalize, true);
+    addSetChips(selectedAbilities, renderAbilityOptionStates, titleCase);
+    addSetChips(selectedMoves, renderMoveOptionStates, titleCase);
+    addSetChips(selectedShapes, renderShapeOptionStates, titleCase);
+    addSetChips(selectedGrowthRates, renderGrowthOptionStates, titleCase);
+
+    if (bstMin !== null || bstMax !== null) {
+      chips.push({
+        label: `BST ${bstMin ?? 0}–${bstMax ?? 800}`,
+        onRemove: () => {
+          bstMin = null;
+          bstMax = null;
+          bstMinInput.value = "";
+          bstMaxInput.value = "";
+          applyFiltersAndChips();
+        },
+      });
+    }
+    if (genderlessFilter !== "any") {
+      chips.push({
+        label: genderlessFilter === "only" ? "Genderless only" : "Exclude genderless",
+        onRemove: () => {
+          genderlessFilter = "any";
+          updateGenderlessToggle();
+          applyFiltersAndChips();
+        },
+      });
+    }
+    if (legendaryFilter !== "any") {
+      chips.push({
+        label: legendaryFilter === "only" ? "Legendary/Mythical only" : "Hide Legendary/Mythical",
+        onRemove: () => {
+          legendaryFilter = "any";
+          updateLegendaryToggle();
+          applyFiltersAndChips();
+        },
+      });
+    }
+    if (fullyEvolvedFilter !== "any") {
+      chips.push({
+        label: fullyEvolvedFilter === "only" ? "Fully evolved only" : "Hide fully evolved",
+        onRemove: () => {
+          fullyEvolvedFilter = "any";
+          updateFullyEvolvedToggle();
+          applyFiltersAndChips();
+        },
+      });
+    }
+
+    return chips;
+  }
+
+  function renderActiveChips() {
+    const chips = collectChips();
+    activeChips.innerHTML = chips
+      .map(
+        (c, i) =>
+          `<button type="button" class="chip" data-chip-index="${i}">${c.label}<span class="chip-x">&times;</span></button>`,
+      )
+      .join("");
+    activeChips.querySelectorAll(".chip").forEach((btn, i) => {
+      btn.addEventListener("click", () => chips[i].onRemove());
+    });
+    const hasSelection = chips.length > 0;
+    filtersBtn.classList.toggle("has-selection", hasSelection);
+    filtersBtn.textContent = hasSelection ? `Filters (${chips.length})` : "Filters";
+  }
+
+  function applyFiltersAndChips() {
+    applyFilters();
+    renderActiveChips();
+  }
+
+  function updateScrollLock() {
+    const anyOpen = !modalOverlay.classList.contains("hidden") || !filtersOverlay.classList.contains("hidden");
+    document.documentElement.classList.toggle("modal-open", anyOpen);
+  }
+
+  function openFiltersPanel() {
+    filtersOverlay.classList.remove("hidden");
+    updateScrollLock();
+  }
+
+  function closeFiltersPanel() {
+    filtersOverlay.classList.add("hidden");
+    updateScrollLock();
   }
 
   function statRow(label, value, max = 255) {
@@ -998,11 +1041,21 @@
         ${infoItem("Egg Groups", eggGroupChips(species.eggGroups))}
         ${infoItem("Gender Ratio", genderRatioText(species.genderRate))}
         ${infoItem("Hatch Cycles", species.hatchCounter)}
-        ${infoItem("Growth Rate", titleCase(species.growthRate))}
+        ${infoItem(
+          "Growth Rate",
+          species.growthRate
+            ? `<button type="button" class="attr-click-text" data-filter-type="growthRate" data-filter-value="${species.growthRate}">${titleCase(species.growthRate)}</button>`
+            : "Unknown",
+        )}
         ${infoItem("Capture Rate", species.captureRate)}
         ${infoItem("Base Happiness", species.baseHappiness)}
         ${infoItem("Base XP", form.baseExperience ?? "—")}
-        ${infoItem("Shape", species.shape ? titleCase(species.shape) : "Unknown")}
+        ${infoItem(
+          "Shape",
+          species.shape
+            ? `<button type="button" class="attr-click-text" data-filter-type="shape" data-filter-value="${species.shape}">${titleCase(species.shape)}</button>`
+            : "Unknown",
+        )}
         ${infoItem("Colors", colorDisplay(form.colors), true)}
         ${infoItem("Habitats", habitatDisplay(form.habitats), true)}
       </div>`;
@@ -1089,6 +1142,11 @@
       </div>`;
   }
 
+  function rarityBadge(species) {
+    if (!species.legendary && !species.mythical) return "";
+    return `<button type="button" class="rarity-badge attr-click-text" data-filter-type="rarity" data-filter-value="only">${species.mythical ? "Mythical" : "Legendary"}</button>`;
+  }
+
   function renderVariantHeader(species, form) {
     const name = formDisplayName(species.speciesDisplayName, form);
     return `
@@ -1098,6 +1156,7 @@
         <div class="name">${name}</div>
         ${species.genus ? `<div class="genus">${species.genus}</div>` : ""}
         <div class="types">${form.types.map(clickableTypeBadge).join("")}</div>
+        ${rarityBadge(species)}
         ${form.cry ? `<button class="cry-btn" type="button" data-cry="${form.cry}">&#9654; Cry</button>` : ""}
       </div>
     `;
@@ -1151,7 +1210,7 @@
     bindCryButton();
     bindDexNavEvents();
     modalOverlay.classList.remove("hidden");
-    document.documentElement.classList.add("modal-open");
+    updateScrollLock();
     document.title = `${formDisplayName(species.speciesDisplayName, form)} - Omnidex`;
   }
 
@@ -1196,7 +1255,7 @@
   // triggered the close, since the URL has already been updated by then.
   function closeModalUI() {
     modalOverlay.classList.add("hidden");
-    document.documentElement.classList.remove("modal-open");
+    updateScrollLock();
     currentSpecies = null;
     currentFormSlug = null;
     document.title = "Omnidex";
@@ -1243,14 +1302,24 @@
   modalOverlay.addEventListener("click", (e) => {
     if (e.target === modalOverlay) closeModal();
   });
+
+  filtersBtn.addEventListener("click", () => {
+    if (filtersOverlay.classList.contains("hidden")) openFiltersPanel();
+    else closeFiltersPanel();
+  });
+  filtersClose.addEventListener("click", closeFiltersPanel);
+  filtersOverlay.addEventListener("click", (e) => {
+    if (e.target === filtersOverlay) closeFiltersPanel();
+  });
+
   document.addEventListener("keydown", (e) => {
-    if (e.key === "Escape") closeModal();
+    if (e.key !== "Escape") return;
+    if (!filtersOverlay.classList.contains("hidden")) closeFiltersPanel();
+    else closeModal();
   });
 
   searchInput.addEventListener("input", debounce(handleSearchInput, 120));
   sortSelect.addEventListener("change", applyFilters);
-
-  typeFilterBtn.addEventListener("click", () => toggleTypePanel());
 
   typeOptions.addEventListener("click", (e) => {
     const btn = e.target.closest(".type-option");
@@ -1266,18 +1335,17 @@
       selectedTypes.add(type);
     }
     renderTypeOptionStates();
-    updateTypeFilterBtn();
+    renderActiveChips();
     applyFilters();
   });
 
-  typeFilterPanel.querySelectorAll(".mode-btn").forEach((btn) => {
+  document.querySelectorAll(".mode-btn[data-mode]").forEach((btn) => {
     btn.addEventListener("click", () => {
       typeMode = btn.dataset.mode;
-      typeFilterPanel.querySelectorAll(".mode-btn").forEach((b) => {
+      document.querySelectorAll(".mode-btn[data-mode]").forEach((b) => {
         b.classList.toggle("active", b.dataset.mode === typeMode);
       });
-      updateTypeFilterBtn();
-      applyFilters();
+      applyFiltersAndChips();
     });
   });
 
@@ -1286,8 +1354,7 @@
     typeCountFilter =
       typeCountFilter === "any" ? "single" : typeCountFilter === "single" ? "multi" : "any";
     updateTypeCountToggle();
-    updateTypeFilterBtn();
-    applyFilters();
+    applyFiltersAndChips();
   });
 
   typeClearBtn.addEventListener("click", () => {
@@ -1295,12 +1362,9 @@
     excludedTypes.clear();
     typeCountFilter = "any";
     renderTypeOptionStates();
-    updateTypeFilterBtn();
     updateTypeCountToggle();
-    applyFilters();
+    applyFiltersAndChips();
   });
-
-  genFilterBtn.addEventListener("click", () => toggleGenPanel());
 
   genOptions.addEventListener("click", (e) => {
     const btn = e.target.closest(".gen-option");
@@ -1316,7 +1380,7 @@
       selectedGens.add(gen);
     }
     renderGenOptionStates();
-    updateGenFilterBtn();
+    renderActiveChips();
     applyFilters();
   });
 
@@ -1324,11 +1388,8 @@
     selectedGens.clear();
     excludedGens.clear();
     renderGenOptionStates();
-    updateGenFilterBtn();
-    applyFilters();
+    applyFiltersAndChips();
   });
-
-  stageFilterBtn.addEventListener("click", () => toggleStagePanel());
 
   stageOptions.addEventListener("click", (e) => {
     const btn = e.target.closest(".gen-option");
@@ -1344,7 +1405,7 @@
       selectedStages.add(stage);
     }
     renderStageOptionStates();
-    updateStageFilterBtn();
+    renderActiveChips();
     applyFilters();
   });
 
@@ -1352,11 +1413,8 @@
     selectedStages.clear();
     excludedStages.clear();
     renderStageOptionStates();
-    updateStageFilterBtn();
-    applyFilters();
+    applyFiltersAndChips();
   });
-
-  eggFilterBtn.addEventListener("click", () => toggleEggPanel());
 
   eggOptions.addEventListener("click", (e) => {
     const btn = e.target.closest(".gen-option");
@@ -1365,18 +1423,15 @@
     if (selectedEggGroups.has(group)) selectedEggGroups.delete(group);
     else selectedEggGroups.add(group);
     renderEggOptionStates();
-    updateEggFilterBtn();
+    renderActiveChips();
     applyFilters();
   });
 
   eggClearBtn.addEventListener("click", () => {
     selectedEggGroups.clear();
     renderEggOptionStates();
-    updateEggFilterBtn();
-    applyFilters();
+    applyFiltersAndChips();
   });
-
-  habitatFilterBtn.addEventListener("click", () => toggleHabitatPanel());
 
   habitatOptions.addEventListener("click", (e) => {
     const btn = e.target.closest(".gen-option");
@@ -1392,7 +1447,7 @@
       selectedHabitats.add(habitat);
     }
     renderHabitatOptionStates();
-    updateHabitatFilterBtn();
+    renderActiveChips();
     applyFilters();
   });
 
@@ -1400,20 +1455,16 @@
     selectedHabitats.clear();
     excludedHabitats.clear();
     renderHabitatOptionStates();
-    updateHabitatFilterBtn();
-    applyFilters();
+    applyFiltersAndChips();
   });
 
-  colorFilterBtn.addEventListener("click", () => toggleColorPanel());
-
-  colorFilterPanel.querySelectorAll(".mode-btn").forEach((btn) => {
+  document.querySelectorAll(".mode-btn[data-color-mode]").forEach((btn) => {
     btn.addEventListener("click", () => {
       colorMode = btn.dataset.colorMode;
-      colorFilterPanel.querySelectorAll(".mode-btn").forEach((b) => {
+      document.querySelectorAll(".mode-btn[data-color-mode]").forEach((b) => {
         b.classList.toggle("active", b.dataset.colorMode === colorMode);
       });
-      updateColorFilterBtn();
-      applyFilters();
+      applyFiltersAndChips();
     });
   });
 
@@ -1431,7 +1482,7 @@
       selectedColors.add(color);
     }
     renderColorOptionStates();
-    updateColorFilterBtn();
+    renderActiveChips();
     applyFilters();
   });
 
@@ -1439,15 +1490,12 @@
     selectedColors.clear();
     excludedColors.clear();
     colorMode = "any";
-    colorFilterPanel.querySelectorAll(".mode-btn").forEach((b) => {
+    document.querySelectorAll(".mode-btn[data-color-mode]").forEach((b) => {
       b.classList.toggle("active", b.dataset.colorMode === "any");
     });
     renderColorOptionStates();
-    updateColorFilterBtn();
-    applyFilters();
+    applyFiltersAndChips();
   });
-
-  abilityFilterBtn.addEventListener("click", () => toggleAbilityPanel());
 
   abilityOptions.addEventListener("click", (e) => {
     const btn = e.target.closest(".gen-option");
@@ -1456,7 +1504,7 @@
     if (selectedAbilities.has(ability)) selectedAbilities.delete(ability);
     else selectedAbilities.add(ability);
     renderAbilityOptionStates();
-    updateAbilityFilterBtn();
+    renderActiveChips();
     applyFilters();
   });
 
@@ -1472,11 +1520,8 @@
     abilitySearch.value = "";
     abilityOptions.querySelectorAll(".gen-option").forEach((btn) => btn.classList.remove("hidden"));
     renderAbilityOptionStates();
-    updateAbilityFilterBtn();
-    applyFilters();
+    applyFiltersAndChips();
   });
-
-  moveFilterBtn.addEventListener("click", () => toggleMovePanel());
 
   moveOptions.addEventListener("click", (e) => {
     const btn = e.target.closest(".gen-option");
@@ -1485,7 +1530,7 @@
     if (selectedMoves.has(move)) selectedMoves.delete(move);
     else selectedMoves.add(move);
     renderMoveOptionStates();
-    updateMoveFilterBtn();
+    renderActiveChips();
     applyFilters();
   });
 
@@ -1501,8 +1546,58 @@
     moveSearch.value = "";
     moveOptions.querySelectorAll(".gen-option").forEach((btn) => btn.classList.remove("hidden"));
     renderMoveOptionStates();
-    updateMoveFilterBtn();
+    applyFiltersAndChips();
+  });
+
+  shapeOptions.addEventListener("click", (e) => {
+    const btn = e.target.closest(".gen-option");
+    if (!btn) return;
+    const shape = btn.dataset.shape;
+    if (selectedShapes.has(shape)) selectedShapes.delete(shape);
+    else selectedShapes.add(shape);
+    renderShapeOptionStates();
+    renderActiveChips();
     applyFilters();
+  });
+
+  shapeClearBtn.addEventListener("click", () => {
+    selectedShapes.clear();
+    renderShapeOptionStates();
+    applyFiltersAndChips();
+  });
+
+  growthOptions.addEventListener("click", (e) => {
+    const btn = e.target.closest(".gen-option");
+    if (!btn) return;
+    const growth = btn.dataset.growth;
+    if (selectedGrowthRates.has(growth)) selectedGrowthRates.delete(growth);
+    else selectedGrowthRates.add(growth);
+    renderGrowthOptionStates();
+    renderActiveChips();
+    applyFilters();
+  });
+
+  growthClearBtn.addEventListener("click", () => {
+    selectedGrowthRates.clear();
+    renderGrowthOptionStates();
+    applyFiltersAndChips();
+  });
+
+  function handleBstInput() {
+    const minVal = bstMinInput.value.trim();
+    const maxVal = bstMaxInput.value.trim();
+    bstMin = minVal === "" ? null : Number(minVal);
+    bstMax = maxVal === "" ? null : Number(maxVal);
+    applyFiltersAndChips();
+  }
+  bstMinInput.addEventListener("input", debounce(handleBstInput, 250));
+  bstMaxInput.addEventListener("input", debounce(handleBstInput, 250));
+
+  genderlessToggle.addEventListener("click", () => {
+    genderlessFilter =
+      genderlessFilter === "any" ? "only" : genderlessFilter === "only" ? "exclude" : "any";
+    updateGenderlessToggle();
+    applyFiltersAndChips();
   });
 
   fullyEvolvedToggle.addEventListener("click", () => {
@@ -1510,34 +1605,14 @@
     fullyEvolvedFilter =
       fullyEvolvedFilter === "any" ? "only" : fullyEvolvedFilter === "only" ? "exclude" : "any";
     updateFullyEvolvedToggle();
-    applyFilters();
+    applyFiltersAndChips();
   });
 
-  document.addEventListener("click", (e) => {
-    if (!typeFilterPanel.contains(e.target) && e.target !== typeFilterBtn) {
-      toggleTypePanel(false);
-    }
-    if (!genFilterPanel.contains(e.target) && e.target !== genFilterBtn) {
-      toggleGenPanel(false);
-    }
-    if (!stageFilterPanel.contains(e.target) && e.target !== stageFilterBtn) {
-      toggleStagePanel(false);
-    }
-    if (!eggFilterPanel.contains(e.target) && e.target !== eggFilterBtn) {
-      toggleEggPanel(false);
-    }
-    if (!habitatFilterPanel.contains(e.target) && e.target !== habitatFilterBtn) {
-      toggleHabitatPanel(false);
-    }
-    if (!colorFilterPanel.contains(e.target) && e.target !== colorFilterBtn) {
-      toggleColorPanel(false);
-    }
-    if (!abilityFilterPanel.contains(e.target) && e.target !== abilityFilterBtn) {
-      toggleAbilityPanel(false);
-    }
-    if (!moveFilterPanel.contains(e.target) && e.target !== moveFilterBtn) {
-      toggleMovePanel(false);
-    }
+  legendaryToggle.addEventListener("click", () => {
+    legendaryFilter =
+      legendaryFilter === "any" ? "only" : legendaryFilter === "only" ? "exclude" : "any";
+    updateLegendaryToggle();
+    applyFiltersAndChips();
   });
 
   // Clears every filter dimension and refreshes all filter-bar UI to match
@@ -1562,93 +1637,97 @@
     colorMode = "any";
     selectedAbilities.clear();
     selectedMoves.clear();
+    selectedShapes.clear();
+    selectedGrowthRates.clear();
+    bstMin = null;
+    bstMax = null;
+    bstMinInput.value = "";
+    bstMaxInput.value = "";
+    genderlessFilter = "any";
+    fullyEvolvedFilter = "any";
+    legendaryFilter = "any";
     abilitySearch.value = "";
     moveSearch.value = "";
     abilityOptions.querySelectorAll(".gen-option").forEach((btn) => btn.classList.remove("hidden"));
     moveOptions.querySelectorAll(".gen-option").forEach((btn) => btn.classList.remove("hidden"));
-    fullyEvolvedFilter = "any";
 
-    typeFilterPanel.querySelectorAll(".mode-btn").forEach((b) => {
+    document.querySelectorAll(".mode-btn[data-mode]").forEach((b) => {
       b.classList.toggle("active", b.dataset.mode === "any");
     });
-    colorFilterPanel.querySelectorAll(".mode-btn").forEach((b) => {
+    document.querySelectorAll(".mode-btn[data-color-mode]").forEach((b) => {
       b.classList.toggle("active", b.dataset.colorMode === "any");
     });
     renderTypeOptionStates();
-    updateTypeFilterBtn();
     updateTypeCountToggle();
     renderGenOptionStates();
-    updateGenFilterBtn();
     renderStageOptionStates();
-    updateStageFilterBtn();
     renderEggOptionStates();
-    updateEggFilterBtn();
     renderHabitatOptionStates();
-    updateHabitatFilterBtn();
     renderColorOptionStates();
-    updateColorFilterBtn();
     renderAbilityOptionStates();
-    updateAbilityFilterBtn();
     renderMoveOptionStates();
-    updateMoveFilterBtn();
+    renderShapeOptionStates();
+    renderGrowthOptionStates();
+    updateGenderlessToggle();
     updateFullyEvolvedToggle();
-    toggleTypePanel(false);
-    toggleGenPanel(false);
-    toggleStagePanel(false);
-    toggleEggPanel(false);
-    toggleHabitatPanel(false);
-    toggleColorPanel(false);
-    toggleAbilityPanel(false);
-    toggleMovePanel(false);
+    updateLegendaryToggle();
+    renderActiveChips();
   }
 
   // Clicking a type badge, ability, habitat, color, egg group, generation,
-  // or move inside the modal jumps straight to "show me every Pokemon that
-  // shares this" - replacing whatever was filtered before rather than
-  // combining with it, since combining silently (e.g. an existing Water
-  // filter plus a clicked Fire badge) would OR them into a confusing
-  // Fire-or-Water result instead of the single-trait query the click implies.
+  // move, shape, growth rate, or rarity badge inside the modal jumps
+  // straight to "show me every Pokemon that shares this" - replacing
+  // whatever was filtered before rather than combining with it, since
+  // combining silently (e.g. an existing Water filter plus a clicked Fire
+  // badge) would OR them into a confusing Fire-or-Water result instead of
+  // the single-trait query the click implies.
   function filterByAttribute(kind, value) {
     resetAllFilterState();
     switch (kind) {
       case "type":
         selectedTypes.add(value);
         renderTypeOptionStates();
-        updateTypeFilterBtn();
         break;
       case "ability":
         selectedAbilities.add(value);
         renderAbilityOptionStates();
-        updateAbilityFilterBtn();
         break;
       case "habitat":
         selectedHabitats.add(value);
         renderHabitatOptionStates();
-        updateHabitatFilterBtn();
         break;
       case "color":
         selectedColors.add(value);
         renderColorOptionStates();
-        updateColorFilterBtn();
         break;
       case "eggGroup":
         selectedEggGroups.add(value);
         renderEggOptionStates();
-        updateEggFilterBtn();
         break;
       case "move":
         selectedMoves.add(value);
         renderMoveOptionStates();
-        updateMoveFilterBtn();
         break;
       case "generation":
         selectedGens.add(value);
         renderGenOptionStates();
-        updateGenFilterBtn();
+        break;
+      case "shape":
+        selectedShapes.add(value);
+        renderShapeOptionStates();
+        break;
+      case "growthRate":
+        selectedGrowthRates.add(value);
+        renderGrowthOptionStates();
+        break;
+      case "rarity":
+        legendaryFilter = value;
+        updateLegendaryToggle();
         break;
       default:
         return;
     }
+    renderActiveChips();
     closeModal();
     applyFilters();
     window.scrollTo({ top: 0, behavior: "smooth" });
@@ -1673,6 +1752,7 @@
     formIndex = buildFormIndex();
     populateFilterOptions();
     applyFilters();
+    renderActiveChips();
     applyHashState();
   }
 
