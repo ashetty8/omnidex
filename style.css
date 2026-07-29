@@ -363,6 +363,11 @@ body {
   color: #e5484d;
 }
 
+.type-panel-toggle {
+  width: 100%;
+  margin-bottom: 8px;
+}
+
 .result-count {
   flex: 1 0 100%;
   margin: 2px 0 0;
@@ -499,6 +504,11 @@ body {
 
 .hidden {
   display: none !important;
+}
+
+html.modal-open,
+html.modal-open body {
+  overflow: hidden;
 }
 
 .modal-overlay {

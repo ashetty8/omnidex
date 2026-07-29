@@ -71,6 +71,7 @@
   const typeFilterPanel = document.getElementById("type-filter-panel");
   const typeOptions = document.getElementById("type-options");
   const typeClearBtn = document.getElementById("type-clear-btn");
+  const typeCountToggle = document.getElementById("type-count-toggle");
   const genFilterBtn = document.getElementById("gen-filter-btn");
   const genFilterPanel = document.getElementById("gen-filter-panel");
   const genOptions = document.getElementById("gen-options");
@@ -108,6 +109,7 @@
   let selectedTypes = new Set();
   let excludedTypes = new Set();
   let typeMode = "any"; // "any" (OR) or "all" (AND), applies to selectedTypes only
+  let typeCountFilter = "any"; // "any" | "single" (monotype only) | "multi" (dual-type only) - independent of selectedTypes
   let selectedGens = new Set(); // OR: matches if the Pokémon's (single) generation is selected
   let excludedGens = new Set();
   let selectedStages = new Set(); // OR: matches if the Pokémon's (single) evolution stage is selected
@@ -117,6 +119,7 @@
   let excludedHabitats = new Set();
   let selectedColors = new Set(); // OR: matches if the species has any selected color
   let excludedColors = new Set();
+  let colorMode = "any"; // "any" (OR) or "only" (exact-set match), applies to selectedColors only
   let fullyEvolvedFilter = "any"; // "any" | "only" (fully evolved) | "exclude" (hide fully evolved)
   let evolvesIntoMap = new Map(); // parent speciesName -> [{ id, name, sprite, methods }]
 
@@ -271,6 +274,7 @@
     excludedTypes = new Set(entry.types);
     selectedTypes.clear();
     typeMode = "any";
+    typeCountFilter = "any";
     excludedGens = new Set([entry.generation]);
     selectedGens.clear();
     excludedStages = new Set([entry.evolutionStage]);
@@ -280,13 +284,18 @@
     selectedHabitats.clear();
     excludedColors = new Set(entry.colors);
     selectedColors.clear();
+    colorMode = "any";
     searchInput.value = "";
 
     typeFilterPanel.querySelectorAll(".mode-btn").forEach((b) => {
       b.classList.toggle("active", b.dataset.mode === typeMode);
     });
+    colorFilterPanel.querySelectorAll(".mode-btn").forEach((b) => {
+      b.classList.toggle("active", b.dataset.colorMode === colorMode);
+    });
     renderTypeOptionStates();
     updateTypeFilterBtn();
+    updateTypeCountToggle();
     renderGenOptionStates();
     updateGenFilterBtn();
     renderStageOptionStates();
@@ -317,6 +326,7 @@
       searchInput.value.trim() !== "" ||
       selectedTypes.size > 0 ||
       excludedTypes.size > 0 ||
+      typeCountFilter !== "any" ||
       selectedGens.size > 0 ||
       excludedGens.size > 0 ||
       selectedStages.size > 0 ||
@@ -351,6 +361,14 @@
   function matchesColor(colors) {
     if (excludedColors.size > 0 && colors.some((c) => excludedColors.has(c))) return false;
     if (selectedColors.size === 0) return true;
+    if (colorMode === "only") {
+      // Exact match: the Pokémon's whole color list must be the selected set,
+      // no extra colors - mirrors typeMode "mono".
+      return (
+        colors.length === selectedColors.size &&
+        [...selectedColors].every((c) => colors.includes(c))
+      );
+    }
     return colors.some((c) => selectedColors.has(c));
   }
 
@@ -374,12 +392,19 @@
     return [...selectedTypes].some((t) => entryTypes.includes(t));
   }
 
+  function matchesTypeCount(entryTypes) {
+    if (typeCountFilter === "single") return entryTypes.length === 1;
+    if (typeCountFilter === "multi") return entryTypes.length > 1;
+    return true;
+  }
+
   function applyFilters() {
     const q = searchInput.value.trim().toLowerCase();
     const active =
       q !== "" ||
       selectedTypes.size > 0 ||
       excludedTypes.size > 0 ||
+      typeCountFilter !== "any" ||
       selectedGens.size > 0 ||
       excludedGens.size > 0 ||
       selectedStages.size > 0 ||
@@ -394,6 +419,7 @@
     filtered = flatEntries.filter((e) => {
       if (!active) return e.isDefault;
       if (!matchesSelectedTypes(e.types)) return false;
+      if (!matchesTypeCount(e.types)) return false;
       if (!matchesGen(e.generation)) return false;
       if (!matchesStage(e.evolutionStage)) return false;
       if (selectedEggGroups.size > 0 && !e.eggGroups.some((g) => selectedEggGroups.has(g))) return false;
@@ -495,7 +521,7 @@
   }
 
   function updateTypeFilterBtn() {
-    const hasSelection = selectedTypes.size > 0 || excludedTypes.size > 0;
+    const hasSelection = selectedTypes.size > 0 || excludedTypes.size > 0 || typeCountFilter !== "any";
     typeFilterBtn.classList.toggle("has-selection", hasSelection);
     if (!hasSelection) {
       typeFilterBtn.textContent = "All types";
@@ -506,7 +532,17 @@
     if (excludedTypes.size > 0) {
       label += ` − ${[...excludedTypes].map(capitalize).join(", ")}`;
     }
+    if (typeCountFilter === "single") label += " (Monotype)";
+    if (typeCountFilter === "multi") label += " (Dual-type)";
     typeFilterBtn.textContent = label;
+  }
+
+  function updateTypeCountToggle() {
+    typeCountToggle.classList.toggle("active", typeCountFilter === "single");
+    typeCountToggle.classList.toggle("excluded", typeCountFilter === "multi");
+    typeCountToggle.setAttribute("aria-pressed", String(typeCountFilter !== "any"));
+    typeCountToggle.textContent =
+      typeCountFilter === "single" ? "Monotype only" : typeCountFilter === "multi" ? "Dual-type only" : "Any type count";
   }
 
   function renderTypeOptionStates() {
@@ -639,7 +675,8 @@
       colorFilterBtn.textContent = "Any color";
       return;
     }
-    let label = selectedColors.size > 0 ? [...selectedColors].map(capitalize).join(", ") : "Any color";
+    const joiner = colorMode === "only" ? " + " : ", ";
+    let label = selectedColors.size > 0 ? [...selectedColors].map(capitalize).join(joiner) : "Any color";
     if (excludedColors.size > 0) {
       label += ` − ${[...excludedColors].map(capitalize).join(", ")}`;
     }
@@ -902,6 +939,7 @@
     bindFormTabEvents();
     bindCryButton();
     modalOverlay.classList.remove("hidden");
+    document.documentElement.classList.add("modal-open");
   }
 
   function bindFormTabEvents() {
@@ -935,6 +973,7 @@
 
   function closeModal() {
     modalOverlay.classList.add("hidden");
+    document.documentElement.classList.remove("modal-open");
     currentSpecies = null;
     currentFormSlug = null;
   }
@@ -987,11 +1026,22 @@
     });
   });
 
+  typeCountToggle.addEventListener("click", () => {
+    // Cycle: any -> monotype only -> dual-type only -> any
+    typeCountFilter =
+      typeCountFilter === "any" ? "single" : typeCountFilter === "single" ? "multi" : "any";
+    updateTypeCountToggle();
+    updateTypeFilterBtn();
+    applyFilters();
+  });
+
   typeClearBtn.addEventListener("click", () => {
     selectedTypes.clear();
     excludedTypes.clear();
+    typeCountFilter = "any";
     renderTypeOptionStates();
     updateTypeFilterBtn();
+    updateTypeCountToggle();
     applyFilters();
   });
 
@@ -1101,6 +1151,17 @@
 
   colorFilterBtn.addEventListener("click", () => toggleColorPanel());
 
+  colorFilterPanel.querySelectorAll(".mode-btn").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      colorMode = btn.dataset.colorMode;
+      colorFilterPanel.querySelectorAll(".mode-btn").forEach((b) => {
+        b.classList.toggle("active", b.dataset.colorMode === colorMode);
+      });
+      updateColorFilterBtn();
+      applyFilters();
+    });
+  });
+
   colorOptions.addEventListener("click", (e) => {
     const btn = e.target.closest(".gen-option");
     if (!btn) return;
@@ -1122,6 +1183,10 @@
   colorClearBtn.addEventListener("click", () => {
     selectedColors.clear();
     excludedColors.clear();
+    colorMode = "any";
+    colorFilterPanel.querySelectorAll(".mode-btn").forEach((b) => {
+      b.classList.toggle("active", b.dataset.colorMode === "any");
+    });
     renderColorOptionStates();
     updateColorFilterBtn();
     applyFilters();
@@ -1161,6 +1226,7 @@
     selectedTypes.clear();
     excludedTypes.clear();
     typeMode = "any";
+    typeCountFilter = "any";
     selectedGens.clear();
     excludedGens.clear();
     selectedStages.clear();
@@ -1170,13 +1236,18 @@
     excludedHabitats.clear();
     selectedColors.clear();
     excludedColors.clear();
+    colorMode = "any";
     fullyEvolvedFilter = "any";
 
     typeFilterPanel.querySelectorAll(".mode-btn").forEach((b) => {
       b.classList.toggle("active", b.dataset.mode === "any");
     });
+    colorFilterPanel.querySelectorAll(".mode-btn").forEach((b) => {
+      b.classList.toggle("active", b.dataset.colorMode === "any");
+    });
     renderTypeOptionStates();
     updateTypeFilterBtn();
+    updateTypeCountToggle();
     renderGenOptionStates();
     updateGenFilterBtn();
     renderStageOptionStates();

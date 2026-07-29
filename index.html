@@ -26,6 +26,7 @@
           </div>
           <div id="type-options" class="type-options"></div>
           <p class="type-hint">Click to include, click again to exclude</p>
+          <button id="type-count-toggle" class="toggle-btn type-panel-toggle" type="button" aria-pressed="false">Any type count</button>
           <button id="type-clear-btn" class="type-clear-btn" type="button">Clear types</button>
         </div>
       </div>
@@ -61,6 +62,10 @@
       <div class="type-filter-wrap">
         <button id="color-filter-btn" class="filter-btn" type="button" aria-haspopup="true" aria-expanded="false">Any color</button>
         <div id="color-filter-panel" class="type-filter-panel hidden">
+          <div class="type-mode-toggle">
+            <button class="mode-btn active" data-color-mode="any" type="button">Any</button>
+            <button class="mode-btn" data-color-mode="only" type="button">Only</button>
+          </div>
           <div id="color-options" class="type-options gen-options"></div>
           <p class="type-hint">Click to include, click again to exclude</p>
           <button id="color-clear-btn" class="type-clear-btn" type="button">Clear color</button>
